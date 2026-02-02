@@ -3,11 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/flowmi/flowmi/internal/auth"
+	"github.com/flowmi/flowmi/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -16,7 +15,8 @@ var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with your flowmi account",
 	Long: `Opens a browser window to authenticate with your flowmi account using OAuth2.
-After successful authentication, your credentials are saved to ~/.flowmi.toml.
+After successful authentication, your credentials are saved to
+~/.config/flowmi/credentials.toml (or $XDG_CONFIG_HOME/flowmi/credentials.toml).
 
 Use --no-browser to print the login URL instead of opening the browser automatically.`,
 	RunE: runLogin,
@@ -89,7 +89,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("exchanging code for tokens: %w", err)
 		}
 
-		// Save tokens.
+		// Save tokens to credentials.toml.
 		if err := saveTokens(token); err != nil {
 			return fmt.Errorf("saving tokens: %w", err)
 		}
@@ -103,17 +103,13 @@ func runLogin(cmd *cobra.Command, args []string) error {
 }
 
 func saveTokens(token *auth.TokenResponse) error {
-	viper.Set("access_token", token.AccessToken)
-	viper.Set("refresh_token", token.RefreshToken)
-
-	configFile := viper.ConfigFileUsed()
-	if configFile == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("finding home directory: %w", err)
-		}
-		configFile = filepath.Join(home, ".flowmi.toml")
+	creds, err := config.LoadCredentials()
+	if err != nil {
+		return err
 	}
 
-	return viper.WriteConfigAs(configFile)
+	creds["access_token"] = token.AccessToken
+	creds["refresh_token"] = token.RefreshToken
+
+	return config.SaveCredentials(creds)
 }

@@ -12,6 +12,9 @@ import (
 )
 
 func TestLoginFlow(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
 	// Set up a mock auth server.
 	mockAuth := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -48,13 +51,10 @@ func TestLoginFlow(t *testing.T) {
 	}))
 	defer mockAuth.Close()
 
-	// Point viper at the mock server and a temp config file.
+	// Point viper at the mock server.
 	viper.Set("auth_server_url", mockAuth.URL)
-	configFile := t.TempDir() + "/.flowmi.toml"
-	viper.SetConfigFile(configFile)
 	defer func() {
 		viper.Set("auth_server_url", "")
-		viper.SetConfigFile("")
 	}()
 
 	// Execute the login command with --no-browser (so it doesn't open a real browser).

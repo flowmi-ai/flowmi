@@ -4,34 +4,23 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/flowmi/flowmi/internal/config"
 	"github.com/flowmi/flowmi/internal/ui"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var configureCmd = &cobra.Command{
 	Use:   "configure",
 	Short: "Configure API key interactively",
-	Run: func(cmd *cobra.Command, args []string) {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, ui.ErrorStyle.Render(err.Error()))
-			os.Exit(1)
-		}
-		configPath := filepath.Join(home, ".flowmi.toml")
-		if err := runConfigure(os.Stdin, configPath); err != nil {
-			fmt.Fprintln(os.Stderr, ui.ErrorStyle.Render(err.Error()))
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runConfigure(cmd.InOrStdin())
 	},
 }
 
-// runConfigure reads API key from reader and saves to configPath.
-func runConfigure(in io.Reader, configPath string) error {
+// runConfigure reads API key from reader and saves to credentials.toml.
+func runConfigure(in io.Reader) error {
 	fmt.Print("Enter your API key: ")
 
 	reader := bufio.NewReader(in)
@@ -45,23 +34,19 @@ func runConfigure(in io.Reader, configPath string) error {
 		return fmt.Errorf("API key cannot be empty")
 	}
 
-	viper.Set("api_key", key)
-
-	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		err = viper.SafeWriteConfigAs(configPath)
-	} else {
-		err = viper.WriteConfigAs(configPath)
-	}
+	creds, err := config.LoadCredentials()
 	if err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+		return fmt.Errorf("loading credentials: %w", err)
 	}
 
-	fmt.Println(ui.SuccessStyle.Render("✓ Configuration saved to " + configPath))
+	creds["api_key"] = key
+
+	if err := config.SaveCredentials(creds); err != nil {
+		return fmt.Errorf("saving credentials: %w", err)
+	}
+
+	credsPath, _ := config.CredentialsFilePath()
+	fmt.Println(ui.SuccessStyle.Render("✓ Configuration saved to " + credsPath))
 	return nil
 }
 
