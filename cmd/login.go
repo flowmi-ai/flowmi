@@ -29,7 +29,11 @@ func init() {
 
 func runLogin(cmd *cobra.Command, args []string) error {
 	noBrowser, _ := cmd.Flags().GetBool("no-browser")
-	serverURL := viper.GetString("auth_server_url")
+	authServerURL := viper.GetString("auth_server_url")
+	apiServerURL := viper.GetString("api_server_url")
+	if !viper.IsSet("api_server_url") && authServerURL != defaultAuthServerURL {
+		apiServerURL = authServerURL
+	}
 
 	// Generate PKCE pair.
 	verifier, challenge, err := auth.GeneratePKCE()
@@ -53,7 +57,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
-	authorizeURL := auth.BuildAuthorizeURL(serverURL, redirectURI, state, challenge)
+	authorizeURL := auth.BuildAuthorizeURL(authServerURL, redirectURI, state, challenge)
 
 	if noBrowser {
 		fmt.Fprintln(cmd.OutOrStdout(), "Open this URL in your browser to log in:")
@@ -83,7 +87,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		}
 
 		// Exchange code for tokens.
-		tokenURL := serverURL + "/token"
+		tokenURL := apiServerURL + "/api/v1/token"
 		token, err := auth.ExchangeCode(ctx, tokenURL, result.Code, verifier, redirectURI)
 		if err != nil {
 			return fmt.Errorf("exchanging code for tokens: %w", err)

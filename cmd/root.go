@@ -12,6 +12,11 @@ import (
 
 var cfgFile string
 
+const (
+	defaultAuthServerURL = "https://auth.flowmi.ai"
+	defaultAPIServerURL  = "https://api.flowmi.ai"
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "flowmi",
 	Short: "Your all-in-one command-line tool",
@@ -54,7 +59,8 @@ func initConfig() {
 		viper.SetConfigType("toml")
 	}
 
-	viper.SetDefault("auth_server_url", "https://auth.flowmi.ai")
+	viper.SetDefault("auth_server_url", defaultAuthServerURL)
+	viper.SetDefault("api_server_url", defaultAPIServerURL)
 	viper.SetEnvPrefix("FLOWMI")
 	viper.AutomaticEnv()
 	viper.ReadInConfig() // silently ignore if config file not found
