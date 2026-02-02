@@ -34,7 +34,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $HOME/.flowmi.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $HOME/.flowmi.toml)")
 	rootCmd.PersistentFlags().StringP("output", "o", "text", "output format: text, json, table")
 	viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
 }
@@ -50,7 +50,7 @@ func initConfig() {
 		}
 		viper.AddConfigPath(home)
 		viper.SetConfigName(".flowmi")
-		viper.SetConfigType("yaml")
+		viper.SetConfigType("toml")
 	}
 
 	viper.SetEnvPrefix("FLOWMI")
