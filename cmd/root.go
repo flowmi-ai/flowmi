@@ -53,6 +53,7 @@ func initConfig() {
 		viper.SetConfigType("toml")
 	}
 
+	viper.SetDefault("auth_server_url", "https://auth.flowmi.ai")
 	viper.SetEnvPrefix("FLOWMI")
 	viper.AutomaticEnv()
 	viper.ReadInConfig() // silently ignore if config file not found
