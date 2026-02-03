@@ -34,6 +34,21 @@ type UserProfile struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Note struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type NoteListResponse struct {
+	Items    []Note `json:"items"`
+	Total    int64  `json:"total"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"page_size"`
+}
+
 func NewClient(baseURL, accessToken string) *Client {
 	return &Client{
 		BaseURL:     baseURL,
@@ -49,6 +64,9 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 	}
 	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -102,4 +120,72 @@ func (c *Client) GetMe(ctx context.Context) (*UserProfile, error) {
 		return nil, fmt.Errorf("decoding user profile: %w", err)
 	}
 	return &profile, nil
+}
+
+func (c *Client) CreateNote(ctx context.Context, content string) (*Note, error) {
+	body, err := json.Marshal(map[string]string{"content": content})
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/notes", strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(resp.Data, &note); err != nil {
+		return nil, fmt.Errorf("decoding note: %w", err)
+	}
+	return &note, nil
+}
+
+func (c *Client) ListNotes(ctx context.Context, page, pageSize int) (*NoteListResponse, error) {
+	path := fmt.Sprintf("/api/v1/tools/notes?page=%d&page_size=%d", page, pageSize)
+	resp, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var list NoteListResponse
+	if err := json.Unmarshal(resp.Data, &list); err != nil {
+		return nil, fmt.Errorf("decoding note list: %w", err)
+	}
+	return &list, nil
+}
+
+func (c *Client) GetNote(ctx context.Context, id string) (*Note, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/tools/notes/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(resp.Data, &note); err != nil {
+		return nil, fmt.Errorf("decoding note: %w", err)
+	}
+	return &note, nil
+}
+
+func (c *Client) UpdateNote(ctx context.Context, id, content string) (*Note, error) {
+	body, err := json.Marshal(map[string]string{"content": content})
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	resp, err := c.do(ctx, http.MethodPut, "/api/v1/tools/notes/"+id, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(resp.Data, &note); err != nil {
+		return nil, fmt.Errorf("decoding note: %w", err)
+	}
+	return &note, nil
+}
+
+func (c *Client) DeleteNote(ctx context.Context, id string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/api/v1/tools/notes/"+id, nil)
+	return err
 }
