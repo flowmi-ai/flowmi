@@ -3,37 +3,48 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/flowmi/flowmi/internal/auth"
 	"github.com/flowmi/flowmi/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 )
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with your flowmi account",
-	Long: `Opens a browser window to authenticate with your flowmi account using OAuth2.
-After successful authentication, your credentials are saved to
-~/.config/flowmi/credentials.toml (or $XDG_CONFIG_HOME/flowmi/credentials.toml).
+	Long: `Authenticate with your flowmi account.
+
+By default, opens a browser window for OAuth2 login (supports social login).
+Use --email and --password flags for direct email/password login (e.g. CI/CD).
 
 Use --no-browser to print the login URL instead of opening the browser automatically.`,
 	RunE: runLogin,
 }
 
 func init() {
+	loginCmd.Flags().String("email", "", "email address for direct login (skips browser)")
+	loginCmd.Flags().String("password", "", "password for direct login (used with --email)")
 	loginCmd.Flags().Bool("no-browser", false, "print the login URL instead of opening the browser")
 	rootCmd.AddCommand(loginCmd)
 }
 
 func runLogin(cmd *cobra.Command, args []string) error {
+	email, _ := cmd.Flags().GetString("email")
+	if email != "" {
+		return passwordLogin(cmd, email)
+	}
+	return browserLogin(cmd)
+}
+
+// browserLogin opens a browser for OAuth2 PKCE login (default flow).
+func browserLogin(cmd *cobra.Command) error {
 	noBrowser, _ := cmd.Flags().GetBool("no-browser")
 	authServerURL := viper.GetString("auth_server_url")
 	apiServerURL := viper.GetString("api_server_url")
-	if !viper.IsSet("api_server_url") && authServerURL != defaultAuthServerURL {
-		apiServerURL = authServerURL
-	}
 
 	// Generate PKCE pair.
 	verifier, challenge, err := auth.GeneratePKCE()
@@ -87,13 +98,13 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		}
 
 		// Exchange code for tokens.
-		tokenURL := apiServerURL + "/api/v1/token"
+		tokenURL := apiServerURL + "/api/v1/oauth2/token"
 		token, err := auth.ExchangeCode(ctx, tokenURL, result.Code, verifier, redirectURI)
 		if err != nil {
 			return fmt.Errorf("exchanging code for tokens: %w", err)
 		}
 
-		// Save tokens to credentials.toml.
+		// Save tokens.
 		if err := saveTokens(token); err != nil {
 			return fmt.Errorf("saving tokens: %w", err)
 		}
@@ -104,6 +115,74 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	case <-ctx.Done():
 		return fmt.Errorf("login timed out — please try again")
 	}
+}
+
+// passwordLogin authenticates directly via email/password (CI/CD flow).
+func passwordLogin(cmd *cobra.Command, email string) error {
+	apiServerURL := viper.GetString("api_server_url")
+
+	// Get password.
+	password, _ := cmd.Flags().GetString("password")
+	if password == "" {
+		fmt.Fprint(cmd.OutOrStdout(), "Password: ")
+		raw, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Fprintln(cmd.OutOrStdout()) // newline after hidden input
+		if err != nil {
+			return fmt.Errorf("reading password: %w", err)
+		}
+		password = string(raw)
+		if password == "" {
+			return fmt.Errorf("password is required")
+		}
+	}
+
+	// Generate PKCE pair.
+	verifier, challenge, err := auth.GeneratePKCE()
+	if err != nil {
+		return fmt.Errorf("generating PKCE: %w", err)
+	}
+
+	// Generate state.
+	state, err := auth.GenerateState()
+	if err != nil {
+		return fmt.Errorf("generating state: %w", err)
+	}
+
+	// Login: send credentials to get auth code.
+	loginURL := apiServerURL + "/api/v1/oauth2/login"
+	loginResp, err := auth.Login(cmd.Context(), loginURL, &auth.LoginRequest{
+		Email:               email,
+		Password:            password,
+		ClientID:            "flowmi-cli",
+		RedirectURI:         auth.PlaceholderRedirectURI,
+		ResponseType:        "code",
+		CodeChallenge:       challenge,
+		CodeChallengeMethod: "S256",
+		State:               state,
+	})
+	if err != nil {
+		return fmt.Errorf("login failed: %w", err)
+	}
+
+	// Validate state.
+	if loginResp.State != state {
+		return fmt.Errorf("state mismatch: possible CSRF attack")
+	}
+
+	// Exchange code for tokens.
+	tokenURL := apiServerURL + "/api/v1/oauth2/token"
+	token, err := auth.ExchangeCode(cmd.Context(), tokenURL, loginResp.Code, verifier, auth.PlaceholderRedirectURI)
+	if err != nil {
+		return fmt.Errorf("exchanging code for tokens: %w", err)
+	}
+
+	// Save tokens.
+	if err := saveTokens(token); err != nil {
+		return fmt.Errorf("saving tokens: %w", err)
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), "Login successful!")
+	return nil
 }
 
 func saveTokens(token *auth.TokenResponse) error {

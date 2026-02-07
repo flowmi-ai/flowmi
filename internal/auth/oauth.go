@@ -1,19 +1,28 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
+
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
+// PlaceholderRedirectURI is a fixed redirect URI used in the login flow.
+// No real callback server is needed since the CLI calls the login API directly.
+const PlaceholderRedirectURI = "http://127.0.0.1:12345/callback"
 
 // TokenResponse holds the tokens returned by the authorization server.
 type TokenResponse struct {
@@ -21,6 +30,25 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int    `json:"expires_in"`
+}
+
+// LoginRequest is the JSON body sent to the /oauth2/login endpoint.
+type LoginRequest struct {
+	Email               string `json:"email"`
+	Password            string `json:"password"`
+	ClientID            string `json:"client_id"`
+	RedirectURI         string `json:"redirect_uri"`
+	ResponseType        string `json:"response_type"`
+	CodeChallenge       string `json:"code_challenge"`
+	CodeChallengeMethod string `json:"code_challenge_method"`
+	State               string `json:"state"`
+}
+
+// LoginResponse is the JSON response from the /oauth2/login endpoint.
+type LoginResponse struct {
+	Code        string `json:"code"`
+	RedirectURI string `json:"redirect_uri"`
+	State       string `json:"state"`
 }
 
 // GeneratePKCE creates a code_verifier and its S256 code_challenge.
@@ -42,6 +70,136 @@ func GenerateState() (string, error) {
 		return "", fmt.Errorf("generating state: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// Login sends credentials to the login endpoint and returns an auth code.
+func Login(ctx context.Context, loginURL string, req *LoginRequest) (*LoginResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encoding login request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, loginURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("creating login request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("sending login request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseErrorResponse(resp)
+	}
+
+	var envelope struct {
+		Data LoginResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return nil, fmt.Errorf("decoding login response: %w", err)
+	}
+	return &envelope.Data, nil
+}
+
+// ExchangeCode exchanges an authorization code for tokens.
+func ExchangeCode(ctx context.Context, tokenURL, code, verifier, redirectURI string) (*TokenResponse, error) {
+	data := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"code_verifier": {verifier},
+		"redirect_uri":  {redirectURI},
+		"client_id":     {"flowmi-cli"},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("creating token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("exchanging code: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseErrorResponse(resp)
+	}
+
+	var token TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return nil, fmt.Errorf("decoding token response: %w", err)
+	}
+	return &token, nil
+}
+
+// RefreshTokens exchanges a refresh token for a new token pair.
+func RefreshTokens(ctx context.Context, refreshURL, refreshToken string) (*TokenResponse, error) {
+	data := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+		"client_id":     {"flowmi-cli"},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, refreshURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("creating refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("refreshing tokens: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseErrorResponse(resp)
+	}
+
+	var token TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return nil, fmt.Errorf("decoding refresh response: %w", err)
+	}
+	return &token, nil
+}
+
+// parseErrorResponse extracts an error message from a non-200 response.
+// It tries the server envelope format {"error":{"message":"..."}} first,
+// then falls back to OAuth2 standard {"error":"...", "error_description":"..."}.
+func parseErrorResponse(resp *http.Response) error {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil || len(body) == 0 {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	// Try envelope format: {"success":false,"error":{"code":"...","message":"..."}}
+	var envelope struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &envelope) == nil && envelope.Error != nil && envelope.Error.Message != "" {
+		return fmt.Errorf("%s (status %d)", envelope.Error.Message, resp.StatusCode)
+	}
+
+	// Try OAuth2 standard format: {"error":"...","error_description":"..."}
+	var oauth2Err struct {
+		Error       string `json:"error"`
+		Description string `json:"error_description"`
+	}
+	if json.Unmarshal(body, &oauth2Err) == nil && oauth2Err.Error != "" {
+		if oauth2Err.Description != "" {
+			return fmt.Errorf("%s: %s (status %d)", oauth2Err.Error, oauth2Err.Description, resp.StatusCode)
+		}
+		return fmt.Errorf("%s (status %d)", oauth2Err.Error, resp.StatusCode)
+	}
+
+	return fmt.Errorf("server returned status %d", resp.StatusCode)
 }
 
 // CallbackResult holds the code and state received from the OAuth callback.
@@ -100,39 +258,6 @@ func StartCallbackServer(ctx context.Context) (port int, resultCh <-chan Callbac
 	}()
 
 	return port, ch, nil
-}
-
-// ExchangeCode exchanges an authorization code for tokens.
-func ExchangeCode(ctx context.Context, tokenURL, code, verifier, redirectURI string) (*TokenResponse, error) {
-	data := url.Values{
-		"grant_type":    {"authorization_code"},
-		"code":          {code},
-		"code_verifier": {verifier},
-		"redirect_uri":  {redirectURI},
-		"client_id":     {"flowmi-cli"},
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("creating token request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("exchanging code: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token endpoint returned status %d", resp.StatusCode)
-	}
-
-	var token TokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
-		return nil, fmt.Errorf("decoding token response: %w", err)
-	}
-	return &token, nil
 }
 
 // BuildAuthorizeURL constructs the authorization URL with PKCE and state parameters.
