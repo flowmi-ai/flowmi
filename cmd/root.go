@@ -18,10 +18,11 @@ const (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "flowmi",
-	Short: "Your all-in-one command-line tool",
-	Long: `flowmi (fm) brings stock quotes, weather, news, AI image/video generation,
-and more to your terminal. One tool, endless possibilities.`,
+	Use:           "flowmi",
+	Short:         "Flowmi CLI",
+	Long:          `flowmi (fm) — notes, auth, and more from your terminal.`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func Execute() {
