@@ -37,3 +37,21 @@ internal/
 - **API envelope**: server responses use `{"success": bool, "data": ..., "error": {"code": "...", "message": "..."}}`. The `api.Client.do()` method handles unwrapping.
 - **Binary alias**: supports both `flowmi` and `fm` — `cmd/root.go` adapts `Use` field based on `os.Args[0]`.
 - **Config precedence**: flags → env vars (`FLOWMI_` prefix) → config.toml → credentials.toml defaults → hardcoded defaults (`auth.flowmi.ai`, `api.flowmi.ai`).
+- **CLI design**: Follow GitHub CLI (`gh`) conventions — use flags (not positional args) for named parameters. Reference: https://cli.github.com/manual/
+
+## Flowmi Ecosystem
+
+Flowmi is an OAuth2 PKCE auth ecosystem with three independent repos:
+- **flowmi** (Go CLI) → **web** (SvelteKit auth server) → **server** (Go REST API + Postgres/Redis)
+- Flow: CLI generates PKCE pair → opens browser to web `/authorize` → user logs in → redirect with auth code → CLI exchanges code for tokens
+
+## GitHub
+
+All Flowmi repos are under the **humid888** account. Run `gh auth switch` to humid888 before pushing, creating PRs, etc.
+
+## Decision Making
+
+When making technical decisions, follow community best practices over personal preference:
+1. **Research first** — Search HN, Lobsters, SO, Reddit for real-world discussions before deciding
+2. **Don't repeat known mistakes** — If the internet has lessons learned, don't rediscover them
+3. **Be honest about consensus** — If a direction conflicts with community consensus, say so clearly
