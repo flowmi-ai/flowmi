@@ -88,6 +88,7 @@ var noteRestoreCmd = &cobra.Command{
 func init() {
 	noteListCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
 	noteListCmd.Flags().StringSliceP("label", "l", nil, "filter by label (repeatable, comma-separated)")
+	noteListCmd.Flags().StringP("search", "S", "", "search notes by content")
 
 	noteCreateCmd.Flags().StringP("subject", "s", "", "note subject")
 	noteCreateCmd.Flags().StringP("content", "c", "", "note content")
@@ -128,8 +129,9 @@ func runNoteList(cmd *cobra.Command, args []string) error {
 
 	limit, _ := cmd.Flags().GetInt("limit")
 	labels, _ := cmd.Flags().GetStringSlice("label")
+	search, _ := cmd.Flags().GetString("search")
 
-	list, err := client.ListNotes(cmd.Context(), 1, limit, labels, "")
+	list, err := client.ListNotes(cmd.Context(), 1, limit, labels, "", search)
 	if err != nil {
 		return fmt.Errorf("listing notes: %w", err)
 	}
@@ -323,7 +325,7 @@ func runNoteTrash(cmd *cobra.Command, args []string) error {
 
 	limit, _ := cmd.Flags().GetInt("limit")
 
-	list, err := client.ListNotes(cmd.Context(), 1, limit, nil, "trashed")
+	list, err := client.ListNotes(cmd.Context(), 1, limit, nil, "trashed", "")
 	if err != nil {
 		return fmt.Errorf("listing trashed notes: %w", err)
 	}
