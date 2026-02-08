@@ -37,6 +37,7 @@ internal/
 - **API envelope**: server responses use `{"success": bool, "data": ..., "error": {"code": "...", "message": "..."}}`. The `api.Client.do()` method handles unwrapping.
 - **Binary alias**: supports both `flowmi` and `fm` — `cmd/root.go` adapts `Use` field based on `os.Args[0]`.
 - **Config precedence**: flags → env vars (`FLOWMI_` prefix) → config.toml → credentials.toml defaults → hardcoded defaults (`auth.flowmi.ai`, `api.flowmi.ai`).
+- **Struct passing**: always pass structs by pointer (`*T`), not by value. This applies to function parameters, return values, and method receivers. Follows Go Wiki "when in doubt, use a pointer" guidance.
 
 ## JSON Convention
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -20,7 +21,7 @@ type Response struct {
 	Success   bool            `json:"success"`
 	Data      json.RawMessage `json:"data"`
 	Error     *ErrorBody      `json:"error"`
-	RequestID string          `json:"request_id"`
+	RequestID string          `json:"requestId"`
 }
 
 type ErrorBody struct {
@@ -31,23 +32,36 @@ type ErrorBody struct {
 type UserProfile struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type Note struct {
 	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
+	UserID    string    `json:"userId"`
 	Subject   string    `json:"subject"`
 	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Labels    []string  `json:"labels"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type NoteListResponse struct {
 	Items    []Note `json:"items"`
 	Total    int64  `json:"total"`
 	Page     int    `json:"page"`
-	PageSize int    `json:"page_size"`
+	PageSize int    `json:"pageSize"`
+}
+
+type CreateNoteRequest struct {
+	Subject string   `json:"subject"`
+	Content string   `json:"content"`
+	Labels  []string `json:"labels,omitempty"`
+}
+
+type NotePatch struct {
+	Subject *string   `json:"subject,omitempty"`
+	Content *string   `json:"content,omitempty"`
+	Labels  *[]string `json:"labels,omitempty"`
 }
 
 func NewClient(baseURL, accessToken string) *Client {
@@ -123,8 +137,12 @@ func (c *Client) GetMe(ctx context.Context) (*UserProfile, error) {
 	return &profile, nil
 }
 
-func (c *Client) CreateNote(ctx context.Context, subject, content string) (*Note, error) {
-	body, err := json.Marshal(map[string]string{"subject": subject, "content": content})
+func (c *Client) CreateNote(ctx context.Context, subject, content string, labels []string) (*Note, error) {
+	body, err := json.Marshal(CreateNoteRequest{
+		Subject: subject,
+		Content: content,
+		Labels:  labels,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
@@ -141,8 +159,11 @@ func (c *Client) CreateNote(ctx context.Context, subject, content string) (*Note
 	return &note, nil
 }
 
-func (c *Client) ListNotes(ctx context.Context, page, pageSize int) (*NoteListResponse, error) {
+func (c *Client) ListNotes(ctx context.Context, page, pageSize int, label string) (*NoteListResponse, error) {
 	path := fmt.Sprintf("/api/v1/tools/notes?page=%d&page_size=%d", page, pageSize)
+	if label != "" {
+		path += "&label=" + url.QueryEscape(label)
+	}
 	resp, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -168,26 +189,8 @@ func (c *Client) GetNote(ctx context.Context, id string) (*Note, error) {
 	return &note, nil
 }
 
-func (c *Client) UpdateNote(ctx context.Context, id, subject, content string) (*Note, error) {
-	body, err := json.Marshal(map[string]string{"subject": subject, "content": content})
-	if err != nil {
-		return nil, fmt.Errorf("encoding request: %w", err)
-	}
-
-	resp, err := c.do(ctx, http.MethodPut, "/api/v1/tools/notes/"+id, strings.NewReader(string(body)))
-	if err != nil {
-		return nil, err
-	}
-
-	var note Note
-	if err := json.Unmarshal(resp.Data, &note); err != nil {
-		return nil, fmt.Errorf("decoding note: %w", err)
-	}
-	return &note, nil
-}
-
-func (c *Client) PatchNote(ctx context.Context, id string, fields map[string]string) (*Note, error) {
-	body, err := json.Marshal(fields)
+func (c *Client) PatchNote(ctx context.Context, id string, patch *NotePatch) (*Note, error) {
+	body, err := json.Marshal(patch)
 	if err != nil {
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}

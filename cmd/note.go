@@ -22,6 +22,14 @@ func truncate(s string, maxRunes int) string {
 	return string(runes[:maxRunes-3]) + "..."
 }
 
+// formatLabels formats a label slice for display.
+func formatLabels(labels []string) string {
+	if len(labels) == 0 {
+		return "(none)"
+	}
+	return strings.Join(labels, ", ")
+}
+
 var noteCmd = &cobra.Command{
 	Use:   "note",
 	Short: "Manage your notes",
@@ -53,7 +61,7 @@ var noteViewCmd = &cobra.Command{
 var noteEditCmd = &cobra.Command{
 	Use:   "edit <id>",
 	Short: "Edit a note",
-	Long:  `Edit a note's subject and/or content. At least one of --subject or --content must be provided.`,
+	Long:  `Edit a note's subject, content, and/or labels. At least one of --subject, --content, or --label must be provided.`,
 	Args:  cobra.ExactArgs(1),
 	RunE:  runNoteEdit,
 }
@@ -67,13 +75,16 @@ var noteDeleteCmd = &cobra.Command{
 
 func init() {
 	noteListCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
+	noteListCmd.Flags().StringP("label", "l", "", "filter by label")
 
 	noteCreateCmd.Flags().StringP("subject", "s", "", "note subject")
 	noteCreateCmd.Flags().StringP("content", "c", "", "note content")
+	noteCreateCmd.Flags().StringArrayP("label", "l", nil, "label (repeatable)")
 	noteCreateCmd.MarkFlagRequired("content")
 
 	noteEditCmd.Flags().StringP("subject", "s", "", "new subject")
 	noteEditCmd.Flags().StringP("content", "c", "", "new content")
+	noteEditCmd.Flags().StringArrayP("label", "l", nil, "set labels (repeatable, replaces all)")
 
 	noteDeleteCmd.Flags().Bool("yes", false, "skip confirmation prompt")
 
@@ -102,8 +113,9 @@ func runNoteList(cmd *cobra.Command, args []string) error {
 	}
 
 	limit, _ := cmd.Flags().GetInt("limit")
+	label, _ := cmd.Flags().GetString("label")
 
-	list, err := client.ListNotes(cmd.Context(), 1, limit)
+	list, err := client.ListNotes(cmd.Context(), 1, limit, label)
 	if err != nil {
 		return fmt.Errorf("listing notes: %w", err)
 	}
@@ -153,8 +165,9 @@ func runNoteCreate(cmd *cobra.Command, args []string) error {
 
 	subject, _ := cmd.Flags().GetString("subject")
 	content, _ := cmd.Flags().GetString("content")
+	labels, _ := cmd.Flags().GetStringArray("label")
 
-	note, err := client.CreateNote(cmd.Context(), subject, content)
+	note, err := client.CreateNote(cmd.Context(), subject, content, labels)
 	if err != nil {
 		return fmt.Errorf("creating note: %w", err)
 	}
@@ -201,6 +214,7 @@ func printNoteText(cmd *cobra.Command, note *api.Note) error {
 	w := cmd.OutOrStdout()
 	fmt.Fprintf(w, "ID:       %s\n", note.ID)
 	fmt.Fprintf(w, "Subject:  %s\n", note.Subject)
+	fmt.Fprintf(w, "Labels:   %s\n", formatLabels(note.Labels))
 	fmt.Fprintf(w, "Created:  %s\n", note.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Updated:  %s\n", note.UpdatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "\n%s\n", note.Content)
@@ -212,6 +226,7 @@ func printNoteTable(cmd *cobra.Command, note *api.Note) error {
 	fmt.Fprintln(w, "FIELD\tVALUE")
 	fmt.Fprintf(w, "ID\t%s\n", note.ID)
 	fmt.Fprintf(w, "Subject\t%s\n", note.Subject)
+	fmt.Fprintf(w, "Labels\t%s\n", formatLabels(note.Labels))
 	fmt.Fprintf(w, "Created\t%s\n", note.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Updated\t%s\n", note.UpdatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Content\t%s\n", note.Content)
@@ -219,18 +234,26 @@ func printNoteTable(cmd *cobra.Command, note *api.Note) error {
 }
 
 func runNoteEdit(cmd *cobra.Command, args []string) error {
-	fields := make(map[string]string)
+	var patch api.NotePatch
 	if cmd.Flags().Changed("subject") {
-		subject, _ := cmd.Flags().GetString("subject")
-		fields["subject"] = subject
+		s, _ := cmd.Flags().GetString("subject")
+		patch.Subject = &s
 	}
 	if cmd.Flags().Changed("content") {
-		content, _ := cmd.Flags().GetString("content")
-		fields["content"] = content
+		c, _ := cmd.Flags().GetString("content")
+		patch.Content = &c
+	}
+	if cmd.Flags().Changed("label") {
+		labels, _ := cmd.Flags().GetStringArray("label")
+		// --label "" clears all labels
+		if len(labels) == 1 && labels[0] == "" {
+			labels = []string{}
+		}
+		patch.Labels = &labels
 	}
 
-	if len(fields) == 0 {
-		return fmt.Errorf("at least one of --subject or --content must be provided")
+	if patch.Subject == nil && patch.Content == nil && patch.Labels == nil {
+		return fmt.Errorf("at least one of --subject, --content, or --label must be provided")
 	}
 
 	client, err := newNoteClient()
@@ -238,7 +261,7 @@ func runNoteEdit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	note, err := client.PatchNote(cmd.Context(), args[0], fields)
+	note, err := client.PatchNote(cmd.Context(), args[0], &patch)
 	if err != nil {
 		return fmt.Errorf("updating note: %w", err)
 	}
