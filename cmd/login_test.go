@@ -77,7 +77,7 @@ func TestLoginFlow(t *testing.T) {
 	defer viper.Set("api_server_url", "")
 
 	// Execute the login command with flags (non-interactive).
-	rootCmd.SetArgs([]string{"login", "--email", "test@example.com", "--password", "testpass"})
+	rootCmd.SetArgs([]string{"auth", "login", "--email", "test@example.com", "--password", "testpass"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("login command failed: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestLoginFlow(t *testing.T) {
 }
 
 func TestLoginCmdHelp(t *testing.T) {
-	rootCmd.SetArgs([]string{"login", "--help"})
+	rootCmd.SetArgs([]string{"auth", "login", "--help"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("login --help failed: %v", err)
 	}

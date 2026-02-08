@@ -29,7 +29,7 @@ func init() {
 	loginCmd.Flags().String("email", "", "email address for direct login (skips browser)")
 	loginCmd.Flags().String("password", "", "password for direct login (used with --email)")
 	loginCmd.Flags().Bool("no-browser", false, "print the login URL instead of opening the browser")
-	rootCmd.AddCommand(loginCmd)
+	authCmd.AddCommand(loginCmd)
 }
 
 func runLogin(cmd *cobra.Command, args []string) error {

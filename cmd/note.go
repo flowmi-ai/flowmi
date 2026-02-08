@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/flowmi/flowmi/internal/api"
@@ -22,35 +25,37 @@ func truncate(s string, maxRunes int) string {
 var noteCmd = &cobra.Command{
 	Use:   "note",
 	Short: "Manage your notes",
-	Long:  `Create, list, view, update, and delete your notes.`,
+	Long:  `Create, list, view, edit, and delete your notes.`,
 }
 
 var noteListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all notes",
-	RunE:  runNoteList,
+	Use:     "list",
+	Short:   "List all notes",
+	Aliases: []string{"ls"},
+	RunE:    runNoteList,
 }
 
 var noteCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a new note",
-	Args:  cobra.NoArgs,
-	RunE:  runNoteCreate,
+	Use:     "create",
+	Short:   "Create a new note",
+	Aliases: []string{"new"},
+	Args:    cobra.NoArgs,
+	RunE:    runNoteCreate,
 }
 
-var noteGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a note by ID",
+var noteViewCmd = &cobra.Command{
+	Use:   "view <id>",
+	Short: "View a note",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runNoteGet,
+	RunE:  runNoteView,
 }
 
-var noteUpdateCmd = &cobra.Command{
-	Use:   "update <id>",
-	Short: "Update a note",
-	Long:  `Update a note's subject and/or content. At least one of --subject or --content must be provided.`,
+var noteEditCmd = &cobra.Command{
+	Use:   "edit <id>",
+	Short: "Edit a note",
+	Long:  `Edit a note's subject and/or content. At least one of --subject or --content must be provided.`,
 	Args:  cobra.ExactArgs(1),
-	RunE:  runNoteUpdate,
+	RunE:  runNoteEdit,
 }
 
 var noteDeleteCmd = &cobra.Command{
@@ -61,20 +66,21 @@ var noteDeleteCmd = &cobra.Command{
 }
 
 func init() {
-	noteListCmd.Flags().Int("page", 1, "page number")
-	noteListCmd.Flags().Int("page-size", 20, "items per page")
+	noteListCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
 
 	noteCreateCmd.Flags().StringP("subject", "s", "", "note subject")
 	noteCreateCmd.Flags().StringP("content", "c", "", "note content")
 	noteCreateCmd.MarkFlagRequired("content")
 
-	noteUpdateCmd.Flags().StringP("subject", "s", "", "new subject")
-	noteUpdateCmd.Flags().StringP("content", "c", "", "new content")
+	noteEditCmd.Flags().StringP("subject", "s", "", "new subject")
+	noteEditCmd.Flags().StringP("content", "c", "", "new content")
+
+	noteDeleteCmd.Flags().Bool("yes", false, "skip confirmation prompt")
 
 	noteCmd.AddCommand(noteListCmd)
 	noteCmd.AddCommand(noteCreateCmd)
-	noteCmd.AddCommand(noteGetCmd)
-	noteCmd.AddCommand(noteUpdateCmd)
+	noteCmd.AddCommand(noteViewCmd)
+	noteCmd.AddCommand(noteEditCmd)
 	noteCmd.AddCommand(noteDeleteCmd)
 
 	rootCmd.AddCommand(noteCmd)
@@ -83,7 +89,7 @@ func init() {
 func newNoteClient() (*api.Client, error) {
 	accessToken := viper.GetString("access_token")
 	if accessToken == "" {
-		return nil, fmt.Errorf("not logged in. run 'flowmi login' to get started")
+		return nil, fmt.Errorf("not logged in. run 'flowmi auth login' to get started")
 	}
 	apiServerURL := viper.GetString("api_server_url")
 	return api.NewClient(apiServerURL, accessToken), nil
@@ -95,10 +101,9 @@ func runNoteList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	page, _ := cmd.Flags().GetInt("page")
-	pageSize, _ := cmd.Flags().GetInt("page-size")
+	limit, _ := cmd.Flags().GetInt("limit")
 
-	list, err := client.ListNotes(cmd.Context(), page, pageSize)
+	list, err := client.ListNotes(cmd.Context(), 1, limit)
 	if err != nil {
 		return fmt.Errorf("listing notes: %w", err)
 	}
@@ -124,7 +129,7 @@ func printNoteListText(cmd *cobra.Command, list *api.NoteListResponse) error {
 		fmt.Fprintln(w, "No notes found.")
 		return nil
 	}
-	fmt.Fprintf(w, "Notes (page %d, %d total)\n\n", list.Page, list.Total)
+	fmt.Fprintf(w, "Showing %d of %d notes\n\n", len(list.Items), list.Total)
 	for _, n := range list.Items {
 		fmt.Fprintf(w, "  %s  %s  %s  %s\n", n.ID, n.CreatedAt.Format("2006-01-02 15:04"), truncate(n.Subject, 30), truncate(n.Content, 50))
 	}
@@ -166,7 +171,7 @@ func runNoteCreate(cmd *cobra.Command, args []string) error {
 	}
 }
 
-func runNoteGet(cmd *cobra.Command, args []string) error {
+func runNoteView(cmd *cobra.Command, args []string) error {
 	client, err := newNoteClient()
 	if err != nil {
 		return err
@@ -213,7 +218,7 @@ func printNoteTable(cmd *cobra.Command, note *api.Note) error {
 	return w.Flush()
 }
 
-func runNoteUpdate(cmd *cobra.Command, args []string) error {
+func runNoteEdit(cmd *cobra.Command, args []string) error {
 	fields := make(map[string]string)
 	if cmd.Flags().Changed("subject") {
 		subject, _ := cmd.Flags().GetString("subject")
@@ -251,6 +256,20 @@ func runNoteUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runNoteDelete(cmd *cobra.Command, args []string) error {
+	yes, _ := cmd.Flags().GetBool("yes")
+	if !yes {
+		fmt.Fprintf(cmd.OutOrStdout(), "? Delete note %s? (y/N) ", args[0])
+		reader := bufio.NewReader(os.Stdin)
+		answer, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("reading confirmation: %w", err)
+		}
+		answer = strings.TrimSpace(answer)
+		if answer != "y" && answer != "Y" {
+			return fmt.Errorf("cancelled")
+		}
+	}
+
 	client, err := newNoteClient()
 	if err != nil {
 		return err

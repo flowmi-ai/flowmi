@@ -12,21 +12,21 @@ import (
 	"github.com/spf13/viper"
 )
 
-var whoamiCmd = &cobra.Command{
-	Use:   "whoami",
-	Short: "Show the currently authenticated user",
-	Long:  `Display information about the user that is currently logged in.`,
-	RunE:  runWhoami,
+var authStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show authentication status",
+	Long:  "Display information about the currently authenticated user.",
+	RunE:  runAuthStatus,
 }
 
 func init() {
-	rootCmd.AddCommand(whoamiCmd)
+	authCmd.AddCommand(authStatusCmd)
 }
 
-func runWhoami(cmd *cobra.Command, args []string) error {
+func runAuthStatus(cmd *cobra.Command, args []string) error {
 	accessToken := viper.GetString("access_token")
 	if accessToken == "" {
-		return fmt.Errorf("not logged in. run 'flowmi login' to get started")
+		return fmt.Errorf("not logged in. run 'flowmi auth login' to get started")
 	}
 
 	apiServerURL := viper.GetString("api_server_url")
