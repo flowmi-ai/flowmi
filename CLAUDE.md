@@ -38,6 +38,12 @@ internal/
 - **Binary alias**: supports both `flowmi` and `fm` — `cmd/root.go` adapts `Use` field based on `os.Args[0]`.
 - **Config precedence**: flags → env vars (`FLOWMI_` prefix) → config.toml → credentials.toml defaults → hardcoded defaults (`auth.flowmi.ai`, `api.flowmi.ai`).
 
+## JSON Convention
+
+- All JSON field names use **camelCase** (e.g., `createdAt`, `userId`, `pageSize`, `requestId`).
+- **Exception**: OAuth2 RFC 6749 protocol fields remain snake_case per spec (`client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, `access_token`, `refresh_token`, `token_type`, `expires_in`, `grant_type`).
+- This convention applies across all three Flowmi repos (server, web, CLI).
+
 ## CLI Design
 
 Follow GitHub CLI (`gh`) as the design reference for all command-line interface decisions.
