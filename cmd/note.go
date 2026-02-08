@@ -87,16 +87,16 @@ var noteRestoreCmd = &cobra.Command{
 
 func init() {
 	noteListCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
-	noteListCmd.Flags().StringArrayP("label", "l", nil, "filter by label (repeatable)")
+	noteListCmd.Flags().StringSliceP("label", "l", nil, "filter by label (repeatable, comma-separated)")
 
 	noteCreateCmd.Flags().StringP("subject", "s", "", "note subject")
 	noteCreateCmd.Flags().StringP("content", "c", "", "note content")
-	noteCreateCmd.Flags().StringArrayP("label", "l", nil, "label (repeatable)")
+	noteCreateCmd.Flags().StringSliceP("label", "l", nil, "label (repeatable, comma-separated)")
 	noteCreateCmd.MarkFlagRequired("content")
 
 	noteEditCmd.Flags().StringP("subject", "s", "", "new subject")
 	noteEditCmd.Flags().StringP("content", "c", "", "new content")
-	noteEditCmd.Flags().StringArrayP("label", "l", nil, "set labels (repeatable, replaces all)")
+	noteEditCmd.Flags().StringSliceP("label", "l", nil, "set labels (repeatable, comma-separated, replaces all)")
 
 	noteTrashCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
 
@@ -127,7 +127,7 @@ func runNoteList(cmd *cobra.Command, args []string) error {
 	}
 
 	limit, _ := cmd.Flags().GetInt("limit")
-	labels, _ := cmd.Flags().GetStringArray("label")
+	labels, _ := cmd.Flags().GetStringSlice("label")
 
 	list, err := client.ListNotes(cmd.Context(), 1, limit, labels, "")
 	if err != nil {
@@ -179,7 +179,7 @@ func runNoteCreate(cmd *cobra.Command, args []string) error {
 
 	subject, _ := cmd.Flags().GetString("subject")
 	content, _ := cmd.Flags().GetString("content")
-	labels, _ := cmd.Flags().GetStringArray("label")
+	labels, _ := cmd.Flags().GetStringSlice("label")
 
 	note, err := client.CreateNote(cmd.Context(), subject, content, labels)
 	if err != nil {
@@ -258,7 +258,7 @@ func runNoteEdit(cmd *cobra.Command, args []string) error {
 		patch.Content = &c
 	}
 	if cmd.Flags().Changed("label") {
-		labels, _ := cmd.Flags().GetStringArray("label")
+		labels, _ := cmd.Flags().GetStringSlice("label")
 		// --label "" clears all labels
 		if len(labels) == 1 && labels[0] == "" {
 			labels = []string{}
