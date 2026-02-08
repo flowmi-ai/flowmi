@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"text/tabwriter"
 
@@ -33,7 +31,7 @@ func formatLabels(labels []string) string {
 var noteCmd = &cobra.Command{
 	Use:   "note",
 	Short: "Manage your notes",
-	Long:  `Create, list, view, edit, and delete your notes.`,
+	Long:  `Create, list, view, edit, delete, trash, and restore your notes.`,
 }
 
 var noteListCmd = &cobra.Command{
@@ -69,8 +67,22 @@ var noteEditCmd = &cobra.Command{
 var noteDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
 	Short: "Delete a note",
+	Long:  `Move a note to trash. Use "note trash" to list trashed notes and "note restore" to recover them.`,
 	Args:  cobra.ExactArgs(1),
 	RunE:  runNoteDelete,
+}
+
+var noteTrashCmd = &cobra.Command{
+	Use:   "trash",
+	Short: "List notes in trash",
+	RunE:  runNoteTrash,
+}
+
+var noteRestoreCmd = &cobra.Command{
+	Use:   "restore <id>",
+	Short: "Restore a note from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runNoteRestore,
 }
 
 func init() {
@@ -86,13 +98,15 @@ func init() {
 	noteEditCmd.Flags().StringP("content", "c", "", "new content")
 	noteEditCmd.Flags().StringArrayP("label", "l", nil, "set labels (repeatable, replaces all)")
 
-	noteDeleteCmd.Flags().Bool("yes", false, "skip confirmation prompt")
+	noteTrashCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
 
 	noteCmd.AddCommand(noteListCmd)
 	noteCmd.AddCommand(noteCreateCmd)
 	noteCmd.AddCommand(noteViewCmd)
 	noteCmd.AddCommand(noteEditCmd)
 	noteCmd.AddCommand(noteDeleteCmd)
+	noteCmd.AddCommand(noteTrashCmd)
+	noteCmd.AddCommand(noteRestoreCmd)
 
 	rootCmd.AddCommand(noteCmd)
 }
@@ -115,7 +129,7 @@ func runNoteList(cmd *cobra.Command, args []string) error {
 	limit, _ := cmd.Flags().GetInt("limit")
 	label, _ := cmd.Flags().GetString("label")
 
-	list, err := client.ListNotes(cmd.Context(), 1, limit, label)
+	list, err := client.ListNotes(cmd.Context(), 1, limit, label, "")
 	if err != nil {
 		return fmt.Errorf("listing notes: %w", err)
 	}
@@ -279,26 +293,13 @@ func runNoteEdit(cmd *cobra.Command, args []string) error {
 }
 
 func runNoteDelete(cmd *cobra.Command, args []string) error {
-	yes, _ := cmd.Flags().GetBool("yes")
-	if !yes {
-		fmt.Fprintf(cmd.OutOrStdout(), "? Delete note %s? (y/N) ", args[0])
-		reader := bufio.NewReader(os.Stdin)
-		answer, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("reading confirmation: %w", err)
-		}
-		answer = strings.TrimSpace(answer)
-		if answer != "y" && answer != "Y" {
-			return fmt.Errorf("cancelled")
-		}
-	}
-
 	client, err := newNoteClient()
 	if err != nil {
 		return err
 	}
 
-	if err := client.DeleteNote(cmd.Context(), args[0]); err != nil {
+	note, err := client.DeleteNote(cmd.Context(), args[0])
+	if err != nil {
 		return fmt.Errorf("deleting note: %w", err)
 	}
 
@@ -307,9 +308,90 @@ func runNoteDelete(cmd *cobra.Command, args []string) error {
 	case "json":
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]string{"status": "deleted", "id": args[0]})
+		return enc.Encode(note)
 	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Note deleted: %s\n", args[0])
+		fmt.Fprintf(cmd.OutOrStdout(), "Note deleted: %s\n", note.ID)
+		return nil
+	}
+}
+
+func runNoteTrash(cmd *cobra.Command, args []string) error {
+	client, err := newNoteClient()
+	if err != nil {
+		return err
+	}
+
+	limit, _ := cmd.Flags().GetInt("limit")
+
+	list, err := client.ListNotes(cmd.Context(), 1, limit, "", "trashed")
+	if err != nil {
+		return fmt.Errorf("listing trashed notes: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(list)
+	case "table":
+		return printTrashTable(cmd, list)
+	case "text", "":
+		return printTrashText(cmd, list)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func printTrashText(cmd *cobra.Command, list *api.NoteListResponse) error {
+	w := cmd.OutOrStdout()
+	if len(list.Items) == 0 {
+		fmt.Fprintln(w, "Trash is empty.")
+		return nil
+	}
+	fmt.Fprintf(w, "Showing %d of %d trashed notes\n\n", len(list.Items), list.Total)
+	for _, n := range list.Items {
+		deletedAt := ""
+		if n.DeletedAt != nil {
+			deletedAt = n.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "  %s  %s  %s  %s\n", n.ID, deletedAt, truncate(n.Subject, 30), truncate(n.Content, 50))
+	}
+	return nil
+}
+
+func printTrashTable(cmd *cobra.Command, list *api.NoteListResponse) error {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tDELETED\tSUBJECT\tCONTENT")
+	for _, n := range list.Items {
+		deletedAt := ""
+		if n.DeletedAt != nil {
+			deletedAt = n.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", n.ID, deletedAt, truncate(n.Subject, 30), truncate(n.Content, 40))
+	}
+	return w.Flush()
+}
+
+func runNoteRestore(cmd *cobra.Command, args []string) error {
+	client, err := newNoteClient()
+	if err != nil {
+		return err
+	}
+
+	note, err := client.RestoreNote(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("restoring note: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(note)
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Note restored: %s\n", note.ID)
 		return nil
 	}
 }

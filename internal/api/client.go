@@ -36,13 +36,14 @@ type UserProfile struct {
 }
 
 type Note struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userId"`
-	Subject   string    `json:"subject"`
-	Content   string    `json:"content"`
-	Labels    []string  `json:"labels"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        string     `json:"id"`
+	UserID    string     `json:"userId"`
+	Subject   string     `json:"subject"`
+	Content   string     `json:"content"`
+	Labels    []string   `json:"labels"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
 type NoteListResponse struct {
@@ -159,10 +160,13 @@ func (c *Client) CreateNote(ctx context.Context, subject, content string, labels
 	return &note, nil
 }
 
-func (c *Client) ListNotes(ctx context.Context, page, pageSize int, label string) (*NoteListResponse, error) {
+func (c *Client) ListNotes(ctx context.Context, page, pageSize int, label, status string) (*NoteListResponse, error) {
 	path := fmt.Sprintf("/api/v1/tools/notes?page=%d&page_size=%d", page, pageSize)
 	if label != "" {
 		path += "&label=" + url.QueryEscape(label)
+	}
+	if status != "" {
+		path += "&status=" + url.QueryEscape(status)
 	}
 	resp, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -207,7 +211,28 @@ func (c *Client) PatchNote(ctx context.Context, id string, patch *NotePatch) (*N
 	return &note, nil
 }
 
-func (c *Client) DeleteNote(ctx context.Context, id string) error {
-	_, err := c.do(ctx, http.MethodDelete, "/api/v1/tools/notes/"+id, nil)
-	return err
+func (c *Client) DeleteNote(ctx context.Context, id string) (*Note, error) {
+	resp, err := c.do(ctx, http.MethodDelete, "/api/v1/tools/notes/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(resp.Data, &note); err != nil {
+		return nil, fmt.Errorf("decoding note: %w", err)
+	}
+	return &note, nil
+}
+
+func (c *Client) RestoreNote(ctx context.Context, id string) (*Note, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/notes/"+id+"/restore", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(resp.Data, &note); err != nil {
+		return nil, fmt.Errorf("decoding note: %w", err)
+	}
+	return &note, nil
 }
