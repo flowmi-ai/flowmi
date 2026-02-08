@@ -37,6 +37,7 @@ type UserProfile struct {
 type Note struct {
 	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
+	Subject   string    `json:"subject"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -122,8 +123,8 @@ func (c *Client) GetMe(ctx context.Context) (*UserProfile, error) {
 	return &profile, nil
 }
 
-func (c *Client) CreateNote(ctx context.Context, content string) (*Note, error) {
-	body, err := json.Marshal(map[string]string{"content": content})
+func (c *Client) CreateNote(ctx context.Context, subject, content string) (*Note, error) {
+	body, err := json.Marshal(map[string]string{"subject": subject, "content": content})
 	if err != nil {
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
@@ -167,13 +168,31 @@ func (c *Client) GetNote(ctx context.Context, id string) (*Note, error) {
 	return &note, nil
 }
 
-func (c *Client) UpdateNote(ctx context.Context, id, content string) (*Note, error) {
-	body, err := json.Marshal(map[string]string{"content": content})
+func (c *Client) UpdateNote(ctx context.Context, id, subject, content string) (*Note, error) {
+	body, err := json.Marshal(map[string]string{"subject": subject, "content": content})
 	if err != nil {
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
 
 	resp, err := c.do(ctx, http.MethodPut, "/api/v1/tools/notes/"+id, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(resp.Data, &note); err != nil {
+		return nil, fmt.Errorf("decoding note: %w", err)
+	}
+	return &note, nil
+}
+
+func (c *Client) PatchNote(ctx context.Context, id string, fields map[string]string) (*Note, error) {
+	body, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	resp, err := c.do(ctx, http.MethodPatch, "/api/v1/tools/notes/"+id, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}

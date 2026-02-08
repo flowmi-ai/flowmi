@@ -10,6 +10,15 @@ import (
 	"github.com/spf13/viper"
 )
 
+// truncate truncates s to maxRunes runes, appending "..." if truncated.
+func truncate(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes-3]) + "..."
+}
+
 var noteCmd = &cobra.Command{
 	Use:   "note",
 	Short: "Manage your notes",
@@ -23,9 +32,9 @@ var noteListCmd = &cobra.Command{
 }
 
 var noteCreateCmd = &cobra.Command{
-	Use:   "create <content>",
+	Use:   "create <subject> <content>",
 	Short: "Create a new note",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	RunE:  runNoteCreate,
 }
 
@@ -37,9 +46,10 @@ var noteGetCmd = &cobra.Command{
 }
 
 var noteUpdateCmd = &cobra.Command{
-	Use:   "update <id> <content>",
+	Use:   "update <id>",
 	Short: "Update a note",
-	Args:  cobra.ExactArgs(2),
+	Long:  `Update a note's subject and/or content. At least one of --subject or --content must be provided.`,
+	Args:  cobra.ExactArgs(1),
 	RunE:  runNoteUpdate,
 }
 
@@ -53,6 +63,9 @@ var noteDeleteCmd = &cobra.Command{
 func init() {
 	noteListCmd.Flags().Int("page", 1, "page number")
 	noteListCmd.Flags().Int("page-size", 20, "items per page")
+
+	noteUpdateCmd.Flags().StringP("subject", "s", "", "new subject")
+	noteUpdateCmd.Flags().StringP("content", "c", "", "new content")
 
 	noteCmd.AddCommand(noteListCmd)
 	noteCmd.AddCommand(noteCreateCmd)
@@ -109,24 +122,16 @@ func printNoteListText(cmd *cobra.Command, list *api.NoteListResponse) error {
 	}
 	fmt.Fprintf(w, "Notes (page %d, %d total)\n\n", list.Page, list.Total)
 	for _, n := range list.Items {
-		content := n.Content
-		if len(content) > 80 {
-			content = content[:77] + "..."
-		}
-		fmt.Fprintf(w, "  %s  %s  %s\n", n.ID, n.CreatedAt.Format("2006-01-02 15:04"), content)
+		fmt.Fprintf(w, "  %s  %s  %s  %s\n", n.ID, n.CreatedAt.Format("2006-01-02 15:04"), truncate(n.Subject, 30), truncate(n.Content, 50))
 	}
 	return nil
 }
 
 func printNoteListTable(cmd *cobra.Command, list *api.NoteListResponse) error {
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tCREATED\tCONTENT")
+	fmt.Fprintln(w, "ID\tCREATED\tSUBJECT\tCONTENT")
 	for _, n := range list.Items {
-		content := n.Content
-		if len(content) > 60 {
-			content = content[:57] + "..."
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", n.ID, n.CreatedAt.Format("2006-01-02 15:04"), content)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", n.ID, n.CreatedAt.Format("2006-01-02 15:04"), truncate(n.Subject, 30), truncate(n.Content, 40))
 	}
 	return w.Flush()
 }
@@ -137,7 +142,7 @@ func runNoteCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	note, err := client.CreateNote(cmd.Context(), args[0])
+	note, err := client.CreateNote(cmd.Context(), args[0], args[1])
 	if err != nil {
 		return fmt.Errorf("creating note: %w", err)
 	}
@@ -183,6 +188,7 @@ func runNoteGet(cmd *cobra.Command, args []string) error {
 func printNoteText(cmd *cobra.Command, note *api.Note) error {
 	w := cmd.OutOrStdout()
 	fmt.Fprintf(w, "ID:       %s\n", note.ID)
+	fmt.Fprintf(w, "Subject:  %s\n", note.Subject)
 	fmt.Fprintf(w, "Created:  %s\n", note.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Updated:  %s\n", note.UpdatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "\n%s\n", note.Content)
@@ -193,6 +199,7 @@ func printNoteTable(cmd *cobra.Command, note *api.Note) error {
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "FIELD\tVALUE")
 	fmt.Fprintf(w, "ID\t%s\n", note.ID)
+	fmt.Fprintf(w, "Subject\t%s\n", note.Subject)
 	fmt.Fprintf(w, "Created\t%s\n", note.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Updated\t%s\n", note.UpdatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Content\t%s\n", note.Content)
@@ -200,12 +207,26 @@ func printNoteTable(cmd *cobra.Command, note *api.Note) error {
 }
 
 func runNoteUpdate(cmd *cobra.Command, args []string) error {
+	fields := make(map[string]string)
+	if cmd.Flags().Changed("subject") {
+		subject, _ := cmd.Flags().GetString("subject")
+		fields["subject"] = subject
+	}
+	if cmd.Flags().Changed("content") {
+		content, _ := cmd.Flags().GetString("content")
+		fields["content"] = content
+	}
+
+	if len(fields) == 0 {
+		return fmt.Errorf("at least one of --subject or --content must be provided")
+	}
+
 	client, err := newNoteClient()
 	if err != nil {
 		return err
 	}
 
-	note, err := client.UpdateNote(cmd.Context(), args[0], args[1])
+	note, err := client.PatchNote(cmd.Context(), args[0], fields)
 	if err != nil {
 		return fmt.Errorf("updating note: %w", err)
 	}
