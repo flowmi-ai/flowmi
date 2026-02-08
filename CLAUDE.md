@@ -10,6 +10,7 @@ Flowmi CLI (`flowmi` or `fm`) — a Go command-line tool for OAuth2 PKCE authent
 
 ```bash
 go build -o bin/flowmi .                        # Build
+go build -o ~/.local/bin/flowmi .               # Install
 go test ./... -v -race -cover                   # All tests
 go test ./internal/auth/ -v -run TestGeneratePKCE  # Single test
 ```
