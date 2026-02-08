@@ -37,7 +37,23 @@ internal/
 - **API envelope**: server responses use `{"success": bool, "data": ..., "error": {"code": "...", "message": "..."}}`. The `api.Client.do()` method handles unwrapping.
 - **Binary alias**: supports both `flowmi` and `fm` — `cmd/root.go` adapts `Use` field based on `os.Args[0]`.
 - **Config precedence**: flags → env vars (`FLOWMI_` prefix) → config.toml → credentials.toml defaults → hardcoded defaults (`auth.flowmi.ai`, `api.flowmi.ai`).
-- **CLI design**: Follow GitHub CLI (`gh`) conventions — use flags (not positional args) for named parameters. Reference: https://cli.github.com/manual/
+
+## CLI Design
+
+Follow GitHub CLI (`gh`) as the design reference for all command-line interface decisions.
+
+**Reference:** https://cli.github.com/manual/
+
+**Before designing any new command or flag**, run `gh <command> --help` locally to study how `gh` handles similar functionality, then mimic its patterns.
+
+Key conventions to follow:
+- **`noun verb` structure**: `fm note list`, `fm note create` (like `gh issue list`, `gh pr create`)
+- **Flags over positional args**: use named flags for parameters (`--title`, `--body`), not positional arguments
+- **Short flags**: provide single-letter aliases for common flags (`-t` for `--title`, `-o` for `--output`)
+- **`--json` field selection**: support `--json field1,field2` for structured output
+- **Consistent verbs**: `list`, `view`, `create`, `edit`, `delete` (not `show`/`get`/`add`/`update`/`remove`)
+- **Interactive prompts**: when required flags are missing, prompt interactively instead of erroring
+- **`--web` flag**: open the resource in browser where applicable
 
 ## Flowmi Ecosystem
 

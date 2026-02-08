@@ -32,9 +32,9 @@ var noteListCmd = &cobra.Command{
 }
 
 var noteCreateCmd = &cobra.Command{
-	Use:   "create <subject> <content>",
+	Use:   "create",
 	Short: "Create a new note",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.NoArgs,
 	RunE:  runNoteCreate,
 }
 
@@ -63,6 +63,10 @@ var noteDeleteCmd = &cobra.Command{
 func init() {
 	noteListCmd.Flags().Int("page", 1, "page number")
 	noteListCmd.Flags().Int("page-size", 20, "items per page")
+
+	noteCreateCmd.Flags().StringP("subject", "s", "", "note subject")
+	noteCreateCmd.Flags().StringP("content", "c", "", "note content")
+	noteCreateCmd.MarkFlagRequired("content")
 
 	noteUpdateCmd.Flags().StringP("subject", "s", "", "new subject")
 	noteUpdateCmd.Flags().StringP("content", "c", "", "new content")
@@ -142,7 +146,10 @@ func runNoteCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	note, err := client.CreateNote(cmd.Context(), args[0], args[1])
+	subject, _ := cmd.Flags().GetString("subject")
+	content, _ := cmd.Flags().GetString("content")
+
+	note, err := client.CreateNote(cmd.Context(), subject, content)
 	if err != nil {
 		return fmt.Errorf("creating note: %w", err)
 	}
