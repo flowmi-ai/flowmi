@@ -160,10 +160,10 @@ func (c *Client) CreateNote(ctx context.Context, subject, content string, labels
 	return &note, nil
 }
 
-func (c *Client) ListNotes(ctx context.Context, page, pageSize int, label, status string) (*NoteListResponse, error) {
+func (c *Client) ListNotes(ctx context.Context, page, pageSize int, labels []string, status string) (*NoteListResponse, error) {
 	path := fmt.Sprintf("/api/v1/tools/notes?page=%d&page_size=%d", page, pageSize)
-	if label != "" {
-		path += "&label=" + url.QueryEscape(label)
+	if len(labels) > 0 {
+		path += "&labels=" + url.QueryEscape(strings.Join(labels, ","))
 	}
 	if status != "" {
 		path += "&status=" + url.QueryEscape(status)
