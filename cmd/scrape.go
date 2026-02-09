@@ -18,8 +18,6 @@ var scrapeCmd = &cobra.Command{
 }
 
 func init() {
-	scrapeCmd.Flags().BoolP("markdown", "m", false, "Return content as markdown")
-
 	rootCmd.AddCommand(scrapeCmd)
 }
 
@@ -29,11 +27,9 @@ func runScrape(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	markdown, _ := cmd.Flags().GetBool("markdown")
-
 	result, err := client.Scrape(cmd.Context(), &api.ScrapeRequest{
 		URL:             args[0],
-		IncludeMarkdown: markdown,
+		IncludeMarkdown: true,
 	})
 	if err != nil {
 		return fmt.Errorf("scraping: %w", err)
@@ -46,18 +42,15 @@ func runScrape(cmd *cobra.Command, args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
 	case "text", "":
-		return printScrapeText(cmd, result, markdown)
+		return printScrapeText(cmd, result)
 	default:
 		return fmt.Errorf("unsupported output format: %s", output)
 	}
 }
 
-func printScrapeText(cmd *cobra.Command, result *api.ScrapeResponse, markdown bool) error {
+func printScrapeText(cmd *cobra.Command, result *api.ScrapeResponse) error {
 	w := cmd.OutOrStdout()
-	if title := result.Metadata["title"]; title != "" {
-		fmt.Fprintf(w, "Title: %s\n\n", title)
-	}
-	if markdown && result.Markdown != "" {
+	if result.Markdown != "" {
 		fmt.Fprintln(w, result.Markdown)
 	} else {
 		fmt.Fprintln(w, result.Text)

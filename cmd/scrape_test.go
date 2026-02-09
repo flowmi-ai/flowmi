@@ -54,8 +54,8 @@ func TestScrape(t *testing.T) {
 		if req.URL != "https://example.com" {
 			t.Errorf("url = %q, want https://example.com", req.URL)
 		}
-		if req.IncludeMarkdown {
-			t.Error("includeMarkdown = true, want false")
+		if !req.IncludeMarkdown {
+			t.Error("includeMarkdown = false, want true")
 		}
 	})
 	defer server.Close()
@@ -69,37 +69,11 @@ func TestScrape(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Title: Example Domain") {
-		t.Errorf("output missing title, got:\n%s", output)
-	}
-	if !strings.Contains(output, "Example Domain content") {
-		t.Errorf("output missing text content, got:\n%s", output)
-	}
-}
-
-func TestScrapeMarkdown(t *testing.T) {
-	server := scrapeMockServer(t, func(r *http.Request) {
-		var req api.ScrapeRequest
-		json.NewDecoder(r.Body).Decode(&req)
-		if !req.IncludeMarkdown {
-			t.Error("includeMarkdown = false, want true")
-		}
-	})
-	defer server.Close()
-	setupScrapeTest(t, server)
-
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetArgs([]string{"scrape", "https://example.com", "--markdown"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("scrape --markdown failed: %v", err)
-	}
-
-	output := buf.String()
 	if !strings.Contains(output, "# Example Domain") {
 		t.Errorf("output missing markdown content, got:\n%s", output)
 	}
 }
+
 
 func TestScrapeJSON(t *testing.T) {
 	server := scrapeMockServer(t, nil)
@@ -136,12 +110,3 @@ func TestScrapeNoArgs(t *testing.T) {
 	}
 }
 
-func TestScrapeCmdHasFlags(t *testing.T) {
-	f := scrapeCmd.Flags().Lookup("markdown")
-	if f == nil {
-		t.Fatal("--markdown flag not found")
-	}
-	if f.Shorthand != "m" {
-		t.Errorf("--markdown shorthand = %q, want m", f.Shorthand)
-	}
-}
