@@ -112,7 +112,7 @@ func init() {
 	rootCmd.AddCommand(noteCmd)
 }
 
-func newNoteClient() (*api.Client, error) {
+func newAPIClient() (*api.Client, error) {
 	accessToken := viper.GetString("access_token")
 	if accessToken == "" {
 		return nil, fmt.Errorf("not logged in. run 'flowmi auth login' to get started")
@@ -122,7 +122,7 @@ func newNoteClient() (*api.Client, error) {
 }
 
 func runNoteList(cmd *cobra.Command, args []string) error {
-	client, err := newNoteClient()
+	client, err := newAPIClient()
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func printNoteListTable(cmd *cobra.Command, list *api.NoteListResponse) error {
 }
 
 func runNoteCreate(cmd *cobra.Command, args []string) error {
-	client, err := newNoteClient()
+	client, err := newAPIClient()
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func runNoteCreate(cmd *cobra.Command, args []string) error {
 }
 
 func runNoteView(cmd *cobra.Command, args []string) error {
-	client, err := newNoteClient()
+	client, err := newAPIClient()
 	if err != nil {
 		return err
 	}
@@ -272,7 +272,7 @@ func runNoteEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("at least one of --subject, --content, or --label must be provided")
 	}
 
-	client, err := newNoteClient()
+	client, err := newAPIClient()
 	if err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func runNoteEdit(cmd *cobra.Command, args []string) error {
 }
 
 func runNoteDelete(cmd *cobra.Command, args []string) error {
-	client, err := newNoteClient()
+	client, err := newAPIClient()
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func runNoteDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runNoteTrash(cmd *cobra.Command, args []string) error {
-	client, err := newNoteClient()
+	client, err := newAPIClient()
 	if err != nil {
 		return err
 	}
@@ -376,7 +376,7 @@ func printTrashTable(cmd *cobra.Command, list *api.NoteListResponse) error {
 }
 
 func runNoteRestore(cmd *cobra.Command, args []string) error {
-	client, err := newNoteClient()
+	client, err := newAPIClient()
 	if err != nil {
 		return err
 	}

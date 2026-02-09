@@ -201,3 +201,195 @@ func TestListNotesAPIError(t *testing.T) {
 		t.Error("error message should not be empty")
 	}
 }
+
+func TestWebSearch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/v1/tools/web-search" {
+			t.Errorf("path = %s, want /api/v1/tools/web-search", r.URL.Path)
+		}
+
+		var req WebSearchRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Q != "golang concurrency" {
+			t.Errorf("q = %q, want golang concurrency", req.Q)
+		}
+		if req.Num != 5 {
+			t.Errorf("num = %d, want 5", req.Num)
+		}
+		if req.GL != "us" {
+			t.Errorf("gl = %q, want us", req.GL)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &WebSearchResponse{
+				SearchParameters: &SearchParameters{Q: "golang concurrency", Type: "search", Engine: "google"},
+				Organic: []*OrganicResult{
+					{Title: "Go Concurrency", Link: "https://example.com", Snippet: "Learn Go", Position: 1},
+				},
+				Credits: 1,
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	result, err := client.WebSearch(context.Background(), &WebSearchRequest{
+		Q:   "golang concurrency",
+		GL:  "us",
+		Num: 5,
+	})
+	if err != nil {
+		t.Fatalf("WebSearch() error: %v", err)
+	}
+	if len(result.Organic) != 1 {
+		t.Errorf("len(Organic) = %d, want 1", len(result.Organic))
+	}
+	if result.Organic[0].Title != "Go Concurrency" {
+		t.Errorf("Organic[0].Title = %q, want Go Concurrency", result.Organic[0].Title)
+	}
+}
+
+func TestImageSearch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tools/image-search" {
+			t.Errorf("path = %s, want /api/v1/tools/image-search", r.URL.Path)
+		}
+
+		var req ImageSearchRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Q != "golang gopher" {
+			t.Errorf("q = %q, want golang gopher", req.Q)
+		}
+		if req.TBS != "isz:l" {
+			t.Errorf("tbs = %q, want isz:l", req.TBS)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &ImageSearchResponse{
+				SearchParameters: &SearchParameters{Q: "golang gopher", Type: "images", Engine: "google"},
+				Images: []*ImageResult{
+					{Title: "Gopher", ImageURL: "https://example.com/gopher.png", ImageWidth: 1200, ImageHeight: 800, Domain: "example.com", Position: 1},
+				},
+				Credits: 1,
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	result, err := client.ImageSearch(context.Background(), &ImageSearchRequest{
+		Q:   "golang gopher",
+		TBS: "isz:l",
+	})
+	if err != nil {
+		t.Fatalf("ImageSearch() error: %v", err)
+	}
+	if len(result.Images) != 1 {
+		t.Errorf("len(Images) = %d, want 1", len(result.Images))
+	}
+	if result.Images[0].ImageWidth != 1200 {
+		t.Errorf("Images[0].ImageWidth = %d, want 1200", result.Images[0].ImageWidth)
+	}
+}
+
+func TestNewsSearch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tools/news-search" {
+			t.Errorf("path = %s, want /api/v1/tools/news-search", r.URL.Path)
+		}
+
+		var req NewsSearchRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Q != "golang release" {
+			t.Errorf("q = %q, want golang release", req.Q)
+		}
+		if req.TBS != "qdr:w" {
+			t.Errorf("tbs = %q, want qdr:w", req.TBS)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &NewsSearchResponse{
+				SearchParameters: &SearchParameters{Q: "golang release", Type: "news", Engine: "google"},
+				News: []*NewsResult{
+					{Title: "Go 1.23 Released", Link: "https://go.dev/blog", Snippet: "New release", Date: "2 hours ago", Source: "Go Blog", Position: 1},
+				},
+				Credits: 1,
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	result, err := client.NewsSearch(context.Background(), &NewsSearchRequest{
+		Q:   "golang release",
+		TBS: "qdr:w",
+	})
+	if err != nil {
+		t.Fatalf("NewsSearch() error: %v", err)
+	}
+	if len(result.News) != 1 {
+		t.Errorf("len(News) = %d, want 1", len(result.News))
+	}
+	if result.News[0].Source != "Go Blog" {
+		t.Errorf("News[0].Source = %q, want Go Blog", result.News[0].Source)
+	}
+}
+
+func TestScrape(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/v1/tools/web-scrape" {
+			t.Errorf("path = %s, want /api/v1/tools/web-scrape", r.URL.Path)
+		}
+
+		var req ScrapeRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.URL != "https://example.com" {
+			t.Errorf("url = %q, want https://example.com", req.URL)
+		}
+		if !req.IncludeMarkdown {
+			t.Error("includeMarkdown = false, want true")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &ScrapeResponse{
+				Text:     "Example Domain",
+				Markdown: "# Example Domain",
+				Metadata: map[string]string{"title": "Example Domain"},
+				Credits:  1,
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	result, err := client.Scrape(context.Background(), &ScrapeRequest{
+		URL:             "https://example.com",
+		IncludeMarkdown: true,
+	})
+	if err != nil {
+		t.Fatalf("Scrape() error: %v", err)
+	}
+	if result.Text != "Example Domain" {
+		t.Errorf("Text = %q, want Example Domain", result.Text)
+	}
+	if result.Markdown != "# Example Domain" {
+		t.Errorf("Markdown = %q, want # Example Domain", result.Markdown)
+	}
+	if result.Metadata["title"] != "Example Domain" {
+		t.Errorf("Metadata[title] = %q, want Example Domain", result.Metadata["title"])
+	}
+}
