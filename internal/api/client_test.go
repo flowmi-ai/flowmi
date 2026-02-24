@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -391,5 +393,347 @@ func TestScrape(t *testing.T) {
 	}
 	if result.Metadata["title"] != "Example Domain" {
 		t.Errorf("Metadata[title] = %q, want Example Domain", result.Metadata["title"])
+	}
+}
+
+// Drive API tests
+
+func newMockDriveListServer(t *testing.T, check func(r *http.Request)) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if check != nil {
+			check(r)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &DriveListResponse{
+				Items: []DriveObject{
+					{
+						ID:         "obj-1",
+						Path:       "/docs/readme.txt",
+						SizeBytes:  1024,
+						MimeType:   "text/plain",
+						Visibility: "private",
+						Properties: map[string]any{},
+						CreatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+						UpdatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+					},
+				},
+				Total:    1,
+				Page:     1,
+				PageSize: 30,
+			}),
+		})
+	}))
+}
+
+func TestListDriveObjects(t *testing.T) {
+	server := newMockDriveListServer(t, func(r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %s, want GET", r.Method)
+		}
+		q := r.URL.Query()
+		if got := q.Get("page"); got != "1" {
+			t.Errorf("page = %q, want 1", got)
+		}
+		if got := q.Get("pageSize"); got != "30" {
+			t.Errorf("pageSize = %q, want 30", got)
+		}
+	})
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	list, err := client.ListDriveObjects(context.Background(), 1, 30, "")
+	if err != nil {
+		t.Fatalf("ListDriveObjects() error: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Errorf("len(Items) = %d, want 1", len(list.Items))
+	}
+	if list.Items[0].Path != "/docs/readme.txt" {
+		t.Errorf("Items[0].Path = %q, want /docs/readme.txt", list.Items[0].Path)
+	}
+}
+
+func TestListDriveObjectsWithPrefix(t *testing.T) {
+	server := newMockDriveListServer(t, func(r *http.Request) {
+		if got := r.URL.Query().Get("prefix"); got != "/docs" {
+			t.Errorf("prefix = %q, want /docs", got)
+		}
+	})
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	_, err := client.ListDriveObjects(context.Background(), 1, 30, "/docs")
+	if err != nil {
+		t.Fatalf("ListDriveObjects() error: %v", err)
+	}
+}
+
+func TestGetDriveObject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/drive/objects/obj-1" {
+			t.Errorf("path = %s, want /api/v1/drive/objects/obj-1", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &DriveObject{
+				ID:         "obj-1",
+				Path:       "/docs/readme.txt",
+				SizeBytes:  1024,
+				MimeType:   "text/plain",
+				Visibility: "private",
+				Properties: map[string]any{},
+				CreatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	obj, err := client.GetDriveObject(context.Background(), "obj-1")
+	if err != nil {
+		t.Fatalf("GetDriveObject() error: %v", err)
+	}
+	if obj.ID != "obj-1" {
+		t.Errorf("ID = %q, want obj-1", obj.ID)
+	}
+	if obj.Path != "/docs/readme.txt" {
+		t.Errorf("Path = %q, want /docs/readme.txt", obj.Path)
+	}
+}
+
+func TestGetDriveObjectByPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/drive/object" {
+			t.Errorf("path = %s, want /api/v1/drive/object", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("path"); got != "/docs/readme.txt" {
+			t.Errorf("path param = %q, want /docs/readme.txt", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &DriveObject{
+				ID:         "obj-1",
+				Path:       "/docs/readme.txt",
+				SizeBytes:  1024,
+				Visibility: "private",
+				Properties: map[string]any{},
+				CreatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	obj, err := client.GetDriveObjectByPath(context.Background(), "/docs/readme.txt")
+	if err != nil {
+		t.Fatalf("GetDriveObjectByPath() error: %v", err)
+	}
+	if obj.ID != "obj-1" {
+		t.Errorf("ID = %q, want obj-1", obj.ID)
+	}
+}
+
+func TestDeleteDriveObject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("method = %s, want DELETE", r.Method)
+		}
+		if r.URL.Path != "/api/v1/drive/objects/obj-1" {
+			t.Errorf("path = %s, want /api/v1/drive/objects/obj-1", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &DriveObject{
+				ID:         "obj-1",
+				Path:       "/docs/readme.txt",
+				SizeBytes:  1024,
+				Visibility: "private",
+				Properties: map[string]any{},
+				CreatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	obj, err := client.DeleteDriveObject(context.Background(), "obj-1")
+	if err != nil {
+		t.Fatalf("DeleteDriveObject() error: %v", err)
+	}
+	if obj.ID != "obj-1" {
+		t.Errorf("ID = %q, want obj-1", obj.ID)
+	}
+}
+
+func TestInitUpload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/v1/drive/upload" {
+			t.Errorf("path = %s, want /api/v1/drive/upload", r.URL.Path)
+		}
+
+		var req InitUploadRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Path != "/test.txt" {
+			t.Errorf("path = %q, want /test.txt", req.Path)
+		}
+		if req.SizeBytes != 1024 {
+			t.Errorf("sizeBytes = %d, want 1024", req.SizeBytes)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &InitUploadResponse{
+				ID:        "upload-1",
+				UploadURL: "https://r2.example.com/presigned",
+				ExpiresIn: 3600,
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	resp, err := client.InitUpload(context.Background(), &InitUploadRequest{
+		Path:      "/test.txt",
+		SizeBytes: 1024,
+		MimeType:  "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("InitUpload() error: %v", err)
+	}
+	if resp.ID != "upload-1" {
+		t.Errorf("ID = %q, want upload-1", resp.ID)
+	}
+	if resp.UploadURL != "https://r2.example.com/presigned" {
+		t.Errorf("UploadURL = %q, want https://r2.example.com/presigned", resp.UploadURL)
+	}
+}
+
+func TestCompleteUpload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/v1/drive/upload/upload-1/complete" {
+			t.Errorf("path = %s, want /api/v1/drive/upload/upload-1/complete", r.URL.Path)
+		}
+
+		var req CompleteUploadRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.ETag != "etag-abc" {
+			t.Errorf("etag = %q, want etag-abc", req.ETag)
+		}
+		if req.SizeBytes != 1024 {
+			t.Errorf("sizeBytes = %d, want 1024", req.SizeBytes)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &DriveObject{
+				ID:         "obj-new",
+				Path:       "/test.txt",
+				SizeBytes:  1024,
+				Visibility: "private",
+				Properties: map[string]any{},
+				CreatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	obj, err := client.CompleteUpload(context.Background(), "upload-1", "etag-abc", 1024)
+	if err != nil {
+		t.Fatalf("CompleteUpload() error: %v", err)
+	}
+	if obj.ID != "obj-new" {
+		t.Errorf("ID = %q, want obj-new", obj.ID)
+	}
+}
+
+func TestGetDownloadURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/drive/objects/obj-1/download" {
+			t.Errorf("path = %s, want /api/v1/drive/objects/obj-1/download", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Response{
+			Success: true,
+			Data: mustMarshal(t, &DownloadResponse{
+				DownloadURL: "https://r2.example.com/download",
+				ExpiresIn:   3600,
+			}),
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token")
+	resp, err := client.GetDownloadURL(context.Background(), "obj-1")
+	if err != nil {
+		t.Fatalf("GetDownloadURL() error: %v", err)
+	}
+	if resp.DownloadURL != "https://r2.example.com/download" {
+		t.Errorf("DownloadURL = %q, want https://r2.example.com/download", resp.DownloadURL)
+	}
+}
+
+func TestUploadToPresignedURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("method = %s, want PUT", r.Method)
+		}
+		if got := r.Header.Get("Content-Type"); got != "text/plain" {
+			t.Errorf("Content-Type = %q, want text/plain", got)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != "hello" {
+			t.Errorf("body = %q, want hello", string(body))
+		}
+		w.Header().Set("ETag", `"etag-123"`)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient("unused", "unused")
+	etag, err := client.UploadToPresignedURL(context.Background(), server.URL, "text/plain", strings.NewReader("hello"), 5)
+	if err != nil {
+		t.Fatalf("UploadToPresignedURL() error: %v", err)
+	}
+	if etag != "etag-123" {
+		t.Errorf("etag = %q, want etag-123", etag)
+	}
+}
+
+func TestDownloadFromURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write([]byte("binary data"))
+	}))
+	defer server.Close()
+
+	client := NewClient("unused", "unused")
+	body, err := client.DownloadFromURL(context.Background(), server.URL)
+	if err != nil {
+		t.Fatalf("DownloadFromURL() error: %v", err)
+	}
+	defer body.Close()
+
+	data, _ := io.ReadAll(body)
+	if string(data) != "binary data" {
+		t.Errorf("body = %q, want binary data", string(data))
 	}
 }

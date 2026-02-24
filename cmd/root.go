@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,7 +34,19 @@ func Execute() {
 	}
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		output := viper.GetString("output")
+		if output == "json" {
+			je := struct {
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}{
+				Error:   "command_error",
+				Message: err.Error(),
+			}
+			_ = json.NewEncoder(os.Stderr).Encode(je)
+		} else {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+		}
 		os.Exit(1)
 	}
 }
