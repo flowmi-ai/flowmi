@@ -22,6 +22,9 @@ By default, opens a browser window for OAuth2 login (supports social login).
 Use --email and --password flags for direct email/password login (e.g. CI/CD).
 
 Use --no-browser to print the login URL instead of opening the browser automatically.`,
+	Example: `  flowmi auth login
+  flowmi auth login --no-browser
+  flowmi auth login --email test@example.com --password "$FLOWMI_PASSWORD"`,
 	RunE: runLogin,
 }
 

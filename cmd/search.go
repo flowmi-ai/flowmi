@@ -15,29 +15,39 @@ var searchCmd = &cobra.Command{
 	Use:   "search [query]",
 	Short: "Search the web",
 	Long:  `Search the web, images, or news. Defaults to web search when no subcommand is given.`,
-	RunE:  runSearchWeb,
-	Args:  cobra.ArbitraryArgs,
+	Example: `  flowmi search "golang context"
+  flowmi search web "golang context" -L 5
+  flowmi search images "gopher mascot" --size large
+  flowmi search news "go release" --time week`,
+	RunE: runSearchWeb,
+	Args: cobra.ArbitraryArgs,
 }
 
 var searchWebCmd = &cobra.Command{
 	Use:   "web <query>",
 	Short: "Search the web",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runSearchWeb,
+	Example: `  flowmi search web "distributed tracing"
+  flowmi search web "distributed tracing" -L 5 --country us --language en`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: runSearchWeb,
 }
 
 var searchImagesCmd = &cobra.Command{
 	Use:   "images <query>",
 	Short: "Search for images",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runSearchImages,
+	Example: `  flowmi search images "golang gopher"
+  flowmi search images "golang gopher" --size large`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: runSearchImages,
 }
 
 var searchNewsCmd = &cobra.Command{
 	Use:   "news <query>",
 	Short: "Search for news",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runSearchNews,
+	Example: `  flowmi search news "go 1.26"
+  flowmi search news "go 1.26" --time week`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: runSearchNews,
 }
 
 func init() {

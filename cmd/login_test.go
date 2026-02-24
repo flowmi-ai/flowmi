@@ -98,6 +98,8 @@ func TestLoginFlow(t *testing.T) {
 }
 
 func TestLoginCmdHelp(t *testing.T) {
+	t.Cleanup(func() { resetHelpFlags(rootCmd) })
+	t.Cleanup(resetHelpState)
 	rootCmd.SetArgs([]string{"auth", "login", "--help"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("login --help failed: %v", err)
@@ -115,4 +117,3 @@ func TestLoginCmdHasFlags(t *testing.T) {
 		t.Fatal("--password flag not found")
 	}
 }
-
