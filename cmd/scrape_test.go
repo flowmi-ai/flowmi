@@ -46,8 +46,8 @@ func TestScrape(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %s, want POST", r.Method)
 		}
-		if r.URL.Path != "/api/v1/tools/web-scrape" {
-			t.Errorf("path = %s, want /api/v1/tools/web-scrape", r.URL.Path)
+		if r.URL.Path != "/api/v1/scrape" {
+			t.Errorf("path = %s, want /api/v1/scrape", r.URL.Path)
 		}
 		var req api.ScrapeRequest
 		json.NewDecoder(r.Body).Decode(&req)

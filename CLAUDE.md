@@ -17,6 +17,8 @@ go test ./internal/auth/ -v -run TestGeneratePKCE  # Single test
 
 Version info is injected via ldflags (`version`, `commit`, `date` in `cmd/version.go`).
 
+**After every code change**, run `make build && cp bin/flowmi ~/.local/bin/` to install the updated binary locally.
+
 ## Architecture
 
 Cobra + Viper CLI. Entry: `main.go` → `cmd.Execute()`.

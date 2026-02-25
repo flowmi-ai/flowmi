@@ -387,7 +387,7 @@ func (c *Client) WebSearch(ctx context.Context, req *WebSearchRequest) (*WebSear
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
 
-	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/web-search", bytes.NewReader(body))
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/search/web", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +405,7 @@ func (c *Client) ImageSearch(ctx context.Context, req *ImageSearchRequest) (*Ima
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
 
-	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/image-search", bytes.NewReader(body))
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/search/images", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +423,7 @@ func (c *Client) NewsSearch(ctx context.Context, req *NewsSearchRequest) (*NewsS
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
 
-	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/news-search", bytes.NewReader(body))
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/search/news", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +441,7 @@ func (c *Client) Scrape(ctx context.Context, req *ScrapeRequest) (*ScrapeRespons
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
 
-	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/web-scrape", bytes.NewReader(body))
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/scrape", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

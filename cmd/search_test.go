@@ -85,8 +85,8 @@ func setupSearchTest(t *testing.T, server *httptest.Server) {
 
 func TestSearchDefault(t *testing.T) {
 	server := webSearchMockServer(t, func(r *http.Request) {
-		if r.URL.Path != "/api/v1/tools/web-search" {
-			t.Errorf("path = %s, want /api/v1/tools/web-search", r.URL.Path)
+		if r.URL.Path != "/api/v1/search/web" {
+			t.Errorf("path = %s, want /api/v1/search/web", r.URL.Path)
 		}
 	})
 	defer server.Close()
