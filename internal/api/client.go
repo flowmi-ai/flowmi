@@ -150,7 +150,7 @@ func (c *Client) CreateNote(ctx context.Context, subject, content string, labels
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
 
-	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/notes", strings.NewReader(string(body)))
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/notes", strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (c *Client) CreateNote(ctx context.Context, subject, content string, labels
 }
 
 func (c *Client) ListNotes(ctx context.Context, page, pageSize int, labels []string, status, query string) (*NoteListResponse, error) {
-	path := fmt.Sprintf("/api/v1/tools/notes?page=%d&page_size=%d", page, pageSize)
+	path := fmt.Sprintf("/api/v1/notes?page=%d&page_size=%d", page, pageSize)
 	if len(labels) > 0 {
 		path += "&labels=" + url.QueryEscape(strings.Join(labels, ","))
 	}
@@ -186,7 +186,7 @@ func (c *Client) ListNotes(ctx context.Context, page, pageSize int, labels []str
 }
 
 func (c *Client) GetNote(ctx context.Context, id string) (*Note, error) {
-	resp, err := c.do(ctx, http.MethodGet, "/api/v1/tools/notes/"+id, nil)
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/notes/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func (c *Client) PatchNote(ctx context.Context, id string, patch *NotePatch) (*N
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
 
-	resp, err := c.do(ctx, http.MethodPatch, "/api/v1/tools/notes/"+id, strings.NewReader(string(body)))
+	resp, err := c.do(ctx, http.MethodPatch, "/api/v1/notes/"+id, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func (c *Client) PatchNote(ctx context.Context, id string, patch *NotePatch) (*N
 }
 
 func (c *Client) DeleteNote(ctx context.Context, id string) (*Note, error) {
-	resp, err := c.do(ctx, http.MethodDelete, "/api/v1/tools/notes/"+id, nil)
+	resp, err := c.do(ctx, http.MethodDelete, "/api/v1/notes/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,7 @@ func (c *Client) DeleteNote(ctx context.Context, id string) (*Note, error) {
 }
 
 func (c *Client) RestoreNote(ctx context.Context, id string) (*Note, error) {
-	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tools/notes/"+id+"/restore", nil)
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/notes/"+id+"/restore", nil)
 	if err != nil {
 		return nil, err
 	}
