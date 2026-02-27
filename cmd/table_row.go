@@ -69,10 +69,13 @@ var tableRowDeleteCmd = &cobra.Command{
 
 var tableRowQueryCmd = &cobra.Command{
 	Use:   "query <table-id>",
-	Short: "Query rows with filters and sorting",
+	Short: "Query rows with filters, sorting, and aggregation",
 	Example: `  fm table row query <table-id> --filter status:eq:todo
   fm table row query <table-id> --filter priority:gt:3 --sort priority:desc
-  fm table row query <table-id> --filter status:eq:done --filter priority:gte:5 -L 10`,
+  fm table row query <table-id> --filter status:eq:done --filter priority:gte:5 -L 10
+  fm table row query <table-id> -a count::total
+  fm table row query <table-id> --filter status:eq:active -a count::total -a sum:amount:total_amount
+  fm table row query <table-id> -a min:price:cheapest -a max:price:most_expensive`,
 	Args: cobra.ExactArgs(1),
 	RunE: runTableRowQuery,
 }
@@ -89,6 +92,7 @@ func init() {
 
 	tableRowQueryCmd.Flags().StringSliceP("filter", "f", nil, "filter condition (repeatable, column:op:value)")
 	tableRowQueryCmd.Flags().StringSliceP("sort", "s", nil, "sort order (repeatable, column:direction)")
+	tableRowQueryCmd.Flags().StringSliceP("aggregate", "a", nil, "aggregate function (repeatable, fn:column:alias)")
 	tableRowQueryCmd.Flags().IntP("limit", "L", 30, "maximum number of rows")
 	tableRowQueryCmd.Flags().IntP("page", "p", 1, "page number")
 
@@ -420,6 +424,28 @@ func runTableRowDelete(cmd *cobra.Command, args []string) error {
 	}
 }
 
+// parseAggregate parses "fn:column:alias" into an AggregateFunc.
+func parseAggregate(s string) (*api.AggregateFunc, error) {
+	parts := strings.SplitN(s, ":", 3)
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid aggregate format %q (expected fn:column:alias)", s)
+	}
+	fn := parts[0]
+	col := parts[1]
+	alias := parts[2]
+	if fn == "" || alias == "" {
+		return nil, fmt.Errorf("invalid aggregate format %q (fn and alias are required)", s)
+	}
+	agg := &api.AggregateFunc{
+		Fn:    fn,
+		Alias: alias,
+	}
+	if col != "" {
+		agg.Column = col
+	}
+	return agg, nil
+}
+
 func runTableRowQuery(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -431,6 +457,7 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 	page, _ := cmd.Flags().GetInt("page")
 	filters, _ := cmd.Flags().GetStringSlice("filter")
 	sorts, _ := cmd.Flags().GetStringSlice("sort")
+	aggregates, _ := cmd.Flags().GetStringSlice("aggregate")
 
 	req := &api.QueryRequest{
 		Page:     page,
@@ -457,6 +484,40 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 		req.Sort = append(req.Sort, sort)
 	}
 
+	// Aggregate mode: different response shape, skip table schema
+	if len(aggregates) > 0 {
+		var aliases []string
+		for _, a := range aggregates {
+			agg, err := parseAggregate(a)
+			if err != nil {
+				return err
+			}
+			req.Aggregate = append(req.Aggregate, agg)
+			aliases = append(aliases, agg.Alias)
+		}
+		req.Page = 0
+		req.PageSize = 0
+
+		resp, err := client.AggregateRows(cmd.Context(), tableID, req)
+		if err != nil {
+			return fmt.Errorf("aggregating rows: %w", err)
+		}
+
+		output := viper.GetString("output")
+		switch output {
+		case "json":
+			enc := json.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent("", "  ")
+			return enc.Encode(resp)
+		case "table":
+			return printAggregateTable(cmd, resp, aliases)
+		case "text", "":
+			return printAggregateText(cmd, resp, aliases)
+		default:
+			return fmt.Errorf("unsupported output format: %s", output)
+		}
+	}
+
 	// Fetch table schema for column display
 	table, err := client.GetTable(cmd.Context(), tableID)
 	if err != nil {
@@ -481,4 +542,21 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 	default:
 		return fmt.Errorf("unsupported output format: %s", output)
 	}
+}
+
+func printAggregateText(cmd *cobra.Command, resp *api.AggregateResponse, aliases []string) error {
+	w := cmd.OutOrStdout()
+	for _, k := range aliases {
+		fmt.Fprintf(w, "%s: %s\n", k, formatCellValue(resp.Results[k]))
+	}
+	return nil
+}
+
+func printAggregateTable(cmd *cobra.Command, resp *api.AggregateResponse, aliases []string) error {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "METRIC\tVALUE")
+	for _, k := range aliases {
+		fmt.Fprintf(w, "%s\t%s\n", k, formatCellValue(resp.Results[k]))
+	}
+	return w.Flush()
 }

@@ -445,11 +445,22 @@ type RowListResponse struct {
 	PageSize int    `json:"pageSize"`
 }
 
+type AggregateFunc struct {
+	Fn     string `json:"fn"`
+	Column string `json:"column,omitempty"`
+	Alias  string `json:"alias"`
+}
+
+type AggregateResponse struct {
+	Results map[string]any `json:"results"`
+}
+
 type QueryRequest struct {
-	Filter   *QueryFilter `json:"filter,omitempty"`
-	Sort     []*QuerySort `json:"sort,omitempty"`
-	Page     int          `json:"page,omitempty"`
-	PageSize int          `json:"pageSize,omitempty"`
+	Filter    *QueryFilter     `json:"filter,omitempty"`
+	Sort      []*QuerySort     `json:"sort,omitempty"`
+	Aggregate []*AggregateFunc `json:"aggregate,omitempty"`
+	Page      int              `json:"page,omitempty"`
+	PageSize  int              `json:"pageSize,omitempty"`
 }
 
 type QueryFilter struct {
@@ -867,6 +878,24 @@ func (c *Client) PatchRow(ctx context.Context, tableID, rowID string, data map[s
 func (c *Client) DeleteRow(ctx context.Context, tableID, rowID string) error {
 	_, err := c.do(ctx, http.MethodDelete, "/api/v1/tables/"+tableID+"/rows/"+rowID, nil)
 	return err
+}
+
+func (c *Client) AggregateRows(ctx context.Context, tableID string, req *QueryRequest) (*AggregateResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tables/"+tableID+"/rows/query", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	var agg AggregateResponse
+	if err := json.Unmarshal(resp.Data, &agg); err != nil {
+		return nil, fmt.Errorf("decoding aggregate response: %w", err)
+	}
+	return &agg, nil
 }
 
 func (c *Client) QueryRows(ctx context.Context, tableID string, req *QueryRequest) (*RowListResponse, error) {
