@@ -69,13 +69,16 @@ var tableRowDeleteCmd = &cobra.Command{
 
 var tableRowQueryCmd = &cobra.Command{
 	Use:   "query <table-id>",
-	Short: "Query rows with filters, sorting, and aggregation",
+	Short: "Query rows with filters, sorting, aggregation, and grouping",
 	Example: `  fm table row query <table-id> --filter status:eq:todo
   fm table row query <table-id> --filter priority:gt:3 --sort priority:desc
   fm table row query <table-id> --filter status:eq:done --filter priority:gte:5 -L 10
   fm table row query <table-id> -a count::total
   fm table row query <table-id> --filter status:eq:active -a count::total -a sum:amount:total_amount
-  fm table row query <table-id> -a min:price:cheapest -a max:price:most_expensive`,
+  fm table row query <table-id> -a min:price:cheapest -a max:price:most_expensive
+  fm table row query <table-id> -g status -a count::total
+  fm table row query <table-id> -g status -a sum:revenue:total_revenue -s total_revenue:desc
+  fm table row query <table-id> -g status -g region -a count::total -f region:eq:US`,
 	Args: cobra.ExactArgs(1),
 	RunE: runTableRowQuery,
 }
@@ -93,6 +96,7 @@ func init() {
 	tableRowQueryCmd.Flags().StringSliceP("filter", "f", nil, "filter condition (repeatable, column:op:value)")
 	tableRowQueryCmd.Flags().StringSliceP("sort", "s", nil, "sort order (repeatable, column:direction)")
 	tableRowQueryCmd.Flags().StringSliceP("aggregate", "a", nil, "aggregate function (repeatable, fn:column:alias)")
+	tableRowQueryCmd.Flags().StringSliceP("group-by", "g", nil, "group by column (repeatable)")
 	tableRowQueryCmd.Flags().IntP("limit", "L", 30, "maximum number of rows")
 	tableRowQueryCmd.Flags().IntP("page", "p", 1, "page number")
 
@@ -458,6 +462,7 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 	filters, _ := cmd.Flags().GetStringSlice("filter")
 	sorts, _ := cmd.Flags().GetStringSlice("sort")
 	aggregates, _ := cmd.Flags().GetStringSlice("aggregate")
+	groupByCols, _ := cmd.Flags().GetStringSlice("group-by")
 
 	req := &api.QueryRequest{
 		Page:     page,
@@ -482,6 +487,42 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		req.Sort = append(req.Sort, sort)
+	}
+
+	// Group-by mode: requires aggregate, returns per-group stats
+	if len(groupByCols) > 0 {
+		if len(aggregates) == 0 {
+			return fmt.Errorf("--group-by requires at least one --aggregate function")
+		}
+		var aliases []string
+		for _, a := range aggregates {
+			agg, err := parseAggregate(a)
+			if err != nil {
+				return err
+			}
+			req.Aggregate = append(req.Aggregate, agg)
+			aliases = append(aliases, agg.Alias)
+		}
+		req.GroupBy = groupByCols
+
+		resp, err := client.GroupByRows(cmd.Context(), tableID, req)
+		if err != nil {
+			return fmt.Errorf("querying grouped rows: %w", err)
+		}
+
+		output := viper.GetString("output")
+		switch output {
+		case "json":
+			enc := json.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent("", "  ")
+			return enc.Encode(resp)
+		case "table":
+			return printGroupByTable(cmd, resp, groupByCols, aliases)
+		case "text", "":
+			return printGroupByText(cmd, resp, groupByCols, aliases)
+		default:
+			return fmt.Errorf("unsupported output format: %s", output)
+		}
 	}
 
 	// Aggregate mode: different response shape, skip table schema
@@ -557,6 +598,52 @@ func printAggregateTable(cmd *cobra.Command, resp *api.AggregateResponse, aliase
 	fmt.Fprintln(w, "METRIC\tVALUE")
 	for _, k := range aliases {
 		fmt.Fprintf(w, "%s\t%s\n", k, formatCellValue(resp.Results[k]))
+	}
+	return w.Flush()
+}
+
+func printGroupByText(cmd *cobra.Command, resp *api.GroupByResponse, groupCols, aliases []string) error {
+	w := cmd.OutOrStdout()
+	if len(resp.Groups) == 0 {
+		fmt.Fprintln(cmd.ErrOrStderr(), "No groups found.")
+		return nil
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "Showing %d of %d groups\n", len(resp.Groups), resp.Total)
+	for i, group := range resp.Groups {
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+		for _, col := range groupCols {
+			fmt.Fprintf(w, "%s: %s\n", col, formatCellValue(group[col]))
+		}
+		for _, alias := range aliases {
+			fmt.Fprintf(w, "%s: %s\n", alias, formatCellValue(group[alias]))
+		}
+	}
+	return nil
+}
+
+func printGroupByTable(cmd *cobra.Command, resp *api.GroupByResponse, groupCols, aliases []string) error {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+
+	headers := make([]string, 0, len(groupCols)+len(aliases))
+	for _, col := range groupCols {
+		headers = append(headers, strings.ToUpper(col))
+	}
+	for _, alias := range aliases {
+		headers = append(headers, strings.ToUpper(alias))
+	}
+	fmt.Fprintln(w, strings.Join(headers, "\t"))
+
+	for _, group := range resp.Groups {
+		parts := make([]string, 0, len(groupCols)+len(aliases))
+		for _, col := range groupCols {
+			parts = append(parts, formatCellValue(group[col]))
+		}
+		for _, alias := range aliases {
+			parts = append(parts, formatCellValue(group[alias]))
+		}
+		fmt.Fprintln(w, strings.Join(parts, "\t"))
 	}
 	return w.Flush()
 }

@@ -459,8 +459,16 @@ type QueryRequest struct {
 	Filter    *QueryFilter     `json:"filter,omitempty"`
 	Sort      []*QuerySort     `json:"sort,omitempty"`
 	Aggregate []*AggregateFunc `json:"aggregate,omitempty"`
+	GroupBy   []string         `json:"groupBy,omitempty"`
 	Page      int              `json:"page,omitempty"`
 	PageSize  int              `json:"pageSize,omitempty"`
+}
+
+type GroupByResponse struct {
+	Groups   []map[string]any `json:"groups"`
+	Total    int64            `json:"total"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"pageSize"`
 }
 
 type QueryFilter struct {
@@ -878,6 +886,24 @@ func (c *Client) PatchRow(ctx context.Context, tableID, rowID string, data map[s
 func (c *Client) DeleteRow(ctx context.Context, tableID, rowID string) error {
 	_, err := c.do(ctx, http.MethodDelete, "/api/v1/tables/"+tableID+"/rows/"+rowID, nil)
 	return err
+}
+
+func (c *Client) GroupByRows(ctx context.Context, tableID string, req *QueryRequest) (*GroupByResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tables/"+tableID+"/rows/query", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	var grouped GroupByResponse
+	if err := json.Unmarshal(resp.Data, &grouped); err != nil {
+		return nil, fmt.Errorf("decoding group by response: %w", err)
+	}
+	return &grouped, nil
 }
 
 func (c *Client) AggregateRows(ctx context.Context, tableID string, req *QueryRequest) (*AggregateResponse, error) {
