@@ -61,10 +61,10 @@ func TestBuildAuthorizeURL(t *testing.T) {
 
 	tests := map[string]string{
 		"client_id":             "flowmi-cli",
-		"redirect_uri":         "http://127.0.0.1:9999/callback",
-		"response_type":        "code",
-		"state":                "mystate",
-		"code_challenge":       "mychallenge",
+		"redirect_uri":          "http://127.0.0.1:9999/callback",
+		"response_type":         "code",
+		"state":                 "mystate",
+		"code_challenge":        "mychallenge",
 		"code_challenge_method": "S256",
 	}
 	for key, want := range tests {

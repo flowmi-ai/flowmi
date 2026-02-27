@@ -74,7 +74,6 @@ func TestScrape(t *testing.T) {
 	}
 }
 
-
 func TestScrapeJSON(t *testing.T) {
 	server := scrapeMockServer(t, nil)
 	defer server.Close()
@@ -109,4 +108,3 @@ func TestScrapeNoArgs(t *testing.T) {
 		t.Fatal("expected error for missing URL argument")
 	}
 }
-

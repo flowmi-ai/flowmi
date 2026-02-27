@@ -264,10 +264,10 @@ func StartCallbackServer(ctx context.Context) (port int, resultCh <-chan Callbac
 func BuildAuthorizeURL(serverURL, redirectURI, state, challenge string) string {
 	params := url.Values{
 		"client_id":             {"flowmi-cli"},
-		"redirect_uri":         {redirectURI},
-		"response_type":        {"code"},
-		"state":                {state},
-		"code_challenge":       {challenge},
+		"redirect_uri":          {redirectURI},
+		"response_type":         {"code"},
+		"state":                 {state},
+		"code_challenge":        {challenge},
 		"code_challenge_method": {"S256"},
 	}
 	return serverURL + "/authorize?" + params.Encode()
