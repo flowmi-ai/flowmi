@@ -9,9 +9,12 @@ Flowmi CLI (`flowmi` or `fm`) — a Go command-line tool for OAuth2 PKCE authent
 ## Commands
 
 ```bash
-go build -o bin/flowmi .                        # Build
-go build -o ~/.local/bin/flowmi .               # Install
-go test ./... -v -race -cover                   # All tests
+make build                                      # Build to bin/flowmi (with ldflags)
+make dev                                        # Dev build (no symbol stripping)
+make test                                       # All tests (go test ./... -v -race -cover)
+make lint                                       # golangci-lint run
+make fmt                                        # gofmt -s -l -w .
+make vet                                        # go vet ./...
 go test ./internal/auth/ -v -run TestGeneratePKCE  # Single test
 ```
 
@@ -24,23 +27,36 @@ Version info is injected via ldflags (`version`, `commit`, `date` in `cmd/versio
 Cobra + Viper CLI. Entry: `main.go` → `cmd.Execute()`.
 
 ```
-cmd/           Cobra commands (login, whoami, note, configure, version)
+cmd/           Cobra commands — one file per resource (note.go, drive.go, email.go, etc.)
 internal/
   auth/        OAuth2 PKCE generation, token exchange, local callback server
-  api/         REST API client (envelope response format)
-  config/      XDG-compliant paths (~/.config/flowmi/), TOML credentials (0600)
-  ui/          lipgloss terminal styles
+  api/         REST API client — all types + methods in client.go (envelope unwrapping)
+  config/      XDG-compliant paths (~/.config/flowmi/), TOML config + credentials (0600)
+  ui/          lipgloss terminal styles (TitleStyle, SuccessStyle, ErrorStyle, etc.)
+```
+
+### Command Tree
+
+```
+fm auth login|status     fm note list|create|view|edit|delete|trash|restore
+fm drive list|upload|download|view|delete     fm table list|create|view|edit|delete
+fm table field add|edit|delete                fm table row list|create|view|edit|delete|query
+fm email send|list|view|delete                fm email mailbox list|create|edit|delete
+fm search [web|images|news]                   fm scrape <url>
+fm config set|get|list                        fm version | fm options
 ```
 
 ### Key Patterns
 
 - **Two login flows**: browser OAuth2 PKCE (default) and direct password login (`--email`/`--password` for CI/CD). Both use PKCE.
-- **Output format**: all display commands support `-o text|json|table` via Viper global flag.
-- **Auth state**: commands check `viper.GetString("access_token")` — credentials are loaded into Viper defaults at init from `credentials.toml`.
+- **Output format switch**: every display command uses the same `switch viper.GetString("output")` pattern with cases for `"json"`, `"table"`, `"text"/""`— follow this when adding commands.
+- **`newAPIClient()` helper** (`cmd/note.go`): shared constructor that reads `access_token` from Viper and returns `*api.Client`. Used by all authenticated commands.
 - **API envelope**: server responses use `{"success": bool, "data": ..., "error": {"code": "...", "message": "..."}}`. The `api.Client.do()` method handles unwrapping.
+- **Drive upload**: 3-step presigned URL flow — `InitUpload` → `UploadToPresignedURL` (PUT to R2) → `CompleteUpload`.
 - **Binary alias**: supports both `flowmi` and `fm` — `cmd/root.go` adapts `Use` field based on `os.Args[0]`.
 - **Config precedence**: flags → env vars (`FLOWMI_` prefix) → config.toml → credentials.toml defaults → hardcoded defaults (`auth.flowmi.ai`, `api.flowmi.ai`).
-- **Struct passing**: always pass structs by pointer (`*T`), not by value. This applies to function parameters, return values, and method receivers. Follows Go Wiki "when in doubt, use a pointer" guidance.
+- **Struct passing**: always pass structs by pointer (`*T`), not by value. This applies to function parameters, return values, and method receivers.
+- **Vendored deps**: uses `vendor/` directory — run `go mod vendor` after adding/updating dependencies.
 
 ## JSON Convention
 

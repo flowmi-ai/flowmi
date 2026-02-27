@@ -8,8 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,8 +27,10 @@ type Response struct {
 }
 
 type ErrorBody struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Hint    string         `json:"hint,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 type UserProfile struct {
@@ -78,7 +80,11 @@ func NewClient(baseURL, accessToken string) *Client {
 func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body)
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+		return nil, &Error{
+			Code:    CodeNetworkError,
+			Message: fmt.Sprintf("creating request: %s", err),
+			Cause:   err,
+		}
 	}
 	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Accept", "application/json")
@@ -88,13 +94,21 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("executing request: %w", err)
+		return nil, &Error{
+			Code:    CodeNetworkError,
+			Message: fmt.Sprintf("executing request: %s", err),
+			Cause:   err,
+		}
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
+		return nil, &Error{
+			Code:    CodeNetworkError,
+			Message: fmt.Sprintf("reading response: %s", err),
+			Cause:   err,
+		}
 	}
 
 	var envelope Response
@@ -106,22 +120,45 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 		if len(snippet) > 200 {
 			snippet = snippet[:200] + "..."
 		}
-		return nil, fmt.Errorf("unexpected response (status %d): %s", resp.StatusCode, snippet)
+		return nil, &Error{
+			Code:       CodeUnexpectedResp,
+			Message:    fmt.Sprintf("unexpected response (status %d): %s", resp.StatusCode, snippet),
+			StatusCode: resp.StatusCode,
+			Cause:      err,
+		}
 	}
 
 	if !envelope.Success {
+		code := CodeUnknownError
 		msg := "unknown error"
-		if envelope.Error != nil && envelope.Error.Message != "" {
-			msg = envelope.Error.Message
+		var hint string
+		var details map[string]any
+		if envelope.Error != nil {
+			if envelope.Error.Code != "" {
+				code = envelope.Error.Code
+			}
+			if envelope.Error.Message != "" {
+				msg = envelope.Error.Message
+			}
+			hint = envelope.Error.Hint
+			details = envelope.Error.Details
 		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return nil, fmt.Errorf("api error (status %d): %s", resp.StatusCode, msg)
+		return nil, &Error{
+			Code:       code,
+			Message:    msg,
+			RequestID:  envelope.RequestID,
+			StatusCode: resp.StatusCode,
+			Hint:       hint,
+			Details:    details,
 		}
-		return nil, fmt.Errorf("api error: %s", msg)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("unexpected status %d for successful response", resp.StatusCode)
+		return nil, &Error{
+			Code:       CodeUnexpectedResp,
+			Message:    fmt.Sprintf("unexpected status %d for successful response", resp.StatusCode),
+			StatusCode: resp.StatusCode,
+		}
 	}
 
 	return &envelope, nil

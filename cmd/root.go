@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/flowmi/flowmi/internal/api"
 	"github.com/flowmi/flowmi/internal/config"
+	"github.com/flowmi/flowmi/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -42,20 +45,8 @@ func Execute() {
 	}
 
 	if err := rootCmd.Execute(); err != nil {
-		output := viper.GetString("output")
-		if output == "json" {
-			je := struct {
-				Error   string `json:"error"`
-				Message string `json:"message"`
-			}{
-				Error:   "command_error",
-				Message: err.Error(),
-			}
-			_ = json.NewEncoder(os.Stderr).Encode(je)
-		} else {
-			fmt.Fprintln(os.Stderr, "Error:", err)
-		}
-		os.Exit(1)
+		exitCode := formatError(err)
+		os.Exit(exitCode)
 	}
 }
 
@@ -300,6 +291,70 @@ func isRequiredFlag(f *pflag.Flag) bool {
 		}
 	}
 	return false
+}
+
+func formatError(err error) int {
+	var apiErr *api.Error
+	if errors.As(err, &apiErr) {
+		if viper.GetString("output") == "json" {
+			formatErrorJSON(apiErr)
+		} else {
+			formatErrorText(apiErr)
+		}
+		return apiErr.ExitCode()
+	}
+
+	// Unstructured error fallback.
+	if viper.GetString("output") == "json" {
+		je := struct {
+			Error struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+			ExitCode int `json:"exitCode"`
+		}{}
+		je.Error.Code = api.CodeCommandError
+		je.Error.Message = err.Error()
+		je.ExitCode = api.ExitBusiness
+		_ = json.NewEncoder(os.Stderr).Encode(je)
+	} else {
+		fmt.Fprintln(os.Stderr, ui.ErrorStyle.Render("Error:")+" "+err.Error())
+	}
+	return api.ExitBusiness
+}
+
+func formatErrorJSON(e *api.Error) {
+	type jsonError struct {
+		Code    string         `json:"code"`
+		Message string         `json:"message"`
+		Hint    string         `json:"hint,omitempty"`
+		Details map[string]any `json:"details,omitempty"`
+	}
+	je := struct {
+		Error     jsonError `json:"error"`
+		RequestID string    `json:"requestId,omitempty"`
+		ExitCode  int       `json:"exitCode"`
+	}{
+		Error: jsonError{
+			Code:    e.Code,
+			Message: e.Message,
+			Hint:    e.Hint,
+			Details: e.Details,
+		},
+		RequestID: e.RequestID,
+		ExitCode:  e.ExitCode(),
+	}
+	_ = json.NewEncoder(os.Stderr).Encode(je)
+}
+
+func formatErrorText(e *api.Error) {
+	fmt.Fprintln(os.Stderr, ui.ErrorStyle.Render(fmt.Sprintf("Error [%s]:", e.Code))+" "+e.Message)
+	if e.Hint != "" {
+		fmt.Fprintln(os.Stderr, ui.SubtleStyle.Render("Hint: "+e.Hint))
+	}
+	if e.RequestID != "" {
+		fmt.Fprintln(os.Stderr, ui.SubtleStyle.Render("Request ID: "+e.RequestID))
+	}
 }
 
 const helpTemplate = `{{with (or .Long .Short)}}{{. | trimTrailingWhitespaces}}{{"\n\n"}}{{end}}{{if or .Runnable .HasSubCommands}}Usage:

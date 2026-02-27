@@ -115,7 +115,8 @@ func init() {
 func newAPIClient() (*api.Client, error) {
 	accessToken := viper.GetString("access_token")
 	if accessToken == "" {
-		return nil, fmt.Errorf("not logged in. run 'flowmi auth login' to get started")
+		return nil, api.NewError(api.CodeAuthRequired, "not logged in").
+			WithHint("Run 'flowmi auth login' to authenticate.")
 	}
 	apiServerURL := viper.GetString("api_server_url")
 	return api.NewClient(apiServerURL, accessToken), nil

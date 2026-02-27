@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"text/tabwriter"
 
+	"github.com/flowmi/flowmi/internal/api"
 	"github.com/flowmi/flowmi/internal/config"
 	"github.com/flowmi/flowmi/internal/ui"
 	"github.com/spf13/cobra"
@@ -56,7 +57,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 
 	store, ok := knownConfigKeys[key]
 	if !ok {
-		return fmt.Errorf("unknown config key: %s", key)
+		return api.NewError(api.CodeConfigNotFound, fmt.Sprintf("unknown config key: %s", key))
 	}
 
 	switch store {
@@ -87,7 +88,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 func runConfigGet(cmd *cobra.Command, args []string) error {
 	key := args[0]
 	if _, ok := knownConfigKeys[key]; !ok {
-		return fmt.Errorf("unknown config key: %s", key)
+		return api.NewError(api.CodeConfigNotFound, fmt.Sprintf("unknown config key: %s", key))
 	}
 
 	value := viper.GetString(key)

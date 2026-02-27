@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -185,9 +186,10 @@ func TestListNotesAPIError(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(Response{
-			Success: false,
+			Success:   false,
+			RequestID: "req_abc123",
 			Error: &ErrorBody{
-				Code:    "UNAUTHORIZED",
+				Code:    CodeAuthUnauthorized,
 				Message: "invalid or expired token",
 			},
 		})
@@ -199,8 +201,25 @@ func TestListNotesAPIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for API error response")
 	}
-	if got := err.Error(); got == "" {
-		t.Error("error message should not be empty")
+
+	var apiErr *Error
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *api.Error, got %T: %v", err, err)
+	}
+	if apiErr.Code != CodeAuthUnauthorized {
+		t.Errorf("Code = %q, want %q", apiErr.Code, CodeAuthUnauthorized)
+	}
+	if apiErr.Message != "invalid or expired token" {
+		t.Errorf("Message = %q, want 'invalid or expired token'", apiErr.Message)
+	}
+	if apiErr.RequestID != "req_abc123" {
+		t.Errorf("RequestID = %q, want req_abc123", apiErr.RequestID)
+	}
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusUnauthorized)
+	}
+	if apiErr.ExitCode() != ExitAuth {
+		t.Errorf("ExitCode() = %d, want %d", apiErr.ExitCode(), ExitAuth)
 	}
 }
 
