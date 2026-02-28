@@ -25,7 +25,7 @@ var globalHelpFlagNames = map[string]struct{}{
 }
 
 const (
-	defaultAuthServerURL = "https://auth.flowmi.ai"
+	defaultAuthServerURL = "https://flowmi.ai"
 	defaultAPIServerURL  = "https://api.flowmi.ai"
 )
 
