@@ -115,11 +115,11 @@ func printEmailListText(cmd *cobra.Command, list *api.EmailListResponse) error {
 	}
 	fmt.Fprintf(w, "Showing %d of %d emails\n\n", len(list.Items), list.Total)
 	for _, e := range list.Items {
-		sentAt := ""
+		ts := e.CreatedAt
 		if e.SentAt != nil {
-			sentAt = e.SentAt.Format("2006-01-02 15:04")
+			ts = *e.SentAt
 		}
-		fmt.Fprintf(w, "  %s  %s  %s  %s  %s\n", e.ID, sentAt, e.Direction, e.From, truncate(e.Subject, 40))
+		fmt.Fprintf(w, "  %s  %s  %s  %s  %s\n", e.ID, ts.Format("2006-01-02 15:04"), e.Direction, e.From, truncate(e.Subject, 40))
 	}
 	return nil
 }
@@ -128,12 +128,12 @@ func printEmailListTable(cmd *cobra.Command, list *api.EmailListResponse) error 
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "ID\tSENT\tDIRECTION\tFROM\tTO\tSUBJECT\tSTATUS")
 	for _, e := range list.Items {
-		sentAt := ""
+		ts := e.CreatedAt
 		if e.SentAt != nil {
-			sentAt = e.SentAt.Format("2006-01-02 15:04")
+			ts = *e.SentAt
 		}
 		to := strings.Join(e.To, ", ")
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", e.ID, sentAt, e.Direction, e.From, truncate(to, 30), truncate(e.Subject, 30), e.Status)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", e.ID, ts.Format("2006-01-02 15:04"), e.Direction, e.From, truncate(to, 30), truncate(e.Subject, 30), e.Status)
 	}
 	return w.Flush()
 }
