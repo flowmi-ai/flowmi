@@ -66,7 +66,6 @@ func init() {
 	emailSendCmd.Flags().StringP("subject", "s", "", "email subject")
 	emailSendCmd.Flags().String("text", "", "plain text body")
 	emailSendCmd.Flags().String("html", "", "HTML body")
-	emailSendCmd.MarkFlagRequired("mailbox")
 	emailSendCmd.MarkFlagRequired("to")
 	emailSendCmd.MarkFlagRequired("subject")
 
