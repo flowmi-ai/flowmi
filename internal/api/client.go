@@ -13,10 +13,16 @@ import (
 	"time"
 )
 
+// TokenRefresher is a callback that refreshes the access token.
+// It receives the request context so cancellation propagates correctly.
+// It returns the new access token or an error.
+type TokenRefresher func(ctx context.Context) (newAccessToken string, err error)
+
 type Client struct {
-	BaseURL     string
-	AccessToken string
-	HTTPClient  *http.Client
+	BaseURL        string
+	AccessToken    string
+	HTTPClient     *http.Client
+	TokenRefresher TokenRefresher
 }
 
 type Response struct {
@@ -78,9 +84,40 @@ func NewClient(baseURL, accessToken string) *Client {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body)
+	// Buffer the request body so we can replay it on token refresh retry.
+	var reqBody []byte
+	if body != nil {
+		var err error
+		reqBody, err = io.ReadAll(body)
+		if err != nil {
+			return nil, &Error{
+				Code:    CodeNetworkError,
+				Message: fmt.Sprintf("reading request body: %s", err),
+				Cause:   err,
+			}
+		}
+	}
+
+	envelope, statusCode, err := c.doOnce(ctx, method, path, reqBody)
+	if err != nil && statusCode == http.StatusUnauthorized && c.TokenRefresher != nil {
+		newToken, refreshErr := c.TokenRefresher(ctx)
+		if refreshErr == nil && newToken != "" {
+			c.AccessToken = newToken
+			envelope, _, err = c.doOnce(ctx, method, path, reqBody)
+		}
+	}
+	return envelope, err
+}
+
+func (c *Client) doOnce(ctx context.Context, method, path string, reqBody []byte) (*Response, int, error) {
+	var bodyReader io.Reader
+	if reqBody != nil {
+		bodyReader = bytes.NewReader(reqBody)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
 	if err != nil {
-		return nil, &Error{
+		return nil, 0, &Error{
 			Code:    CodeNetworkError,
 			Message: fmt.Sprintf("creating request: %s", err),
 			Cause:   err,
@@ -88,13 +125,13 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 	}
 	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Accept", "application/json")
-	if body != nil {
+	if reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, &Error{
+		return nil, 0, &Error{
 			Code:    CodeNetworkError,
 			Message: fmt.Sprintf("executing request: %s", err),
 			Cause:   err,
@@ -104,7 +141,7 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, &Error{
+		return nil, resp.StatusCode, &Error{
 			Code:    CodeNetworkError,
 			Message: fmt.Sprintf("reading response: %s", err),
 			Cause:   err,
@@ -120,7 +157,7 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 		if len(snippet) > 200 {
 			snippet = snippet[:200] + "..."
 		}
-		return nil, &Error{
+		return nil, resp.StatusCode, &Error{
 			Code:       CodeUnexpectedResp,
 			Message:    fmt.Sprintf("unexpected response (status %d): %s", resp.StatusCode, snippet),
 			StatusCode: resp.StatusCode,
@@ -143,7 +180,7 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 			hint = envelope.Error.Hint
 			details = envelope.Error.Details
 		}
-		return nil, &Error{
+		return nil, resp.StatusCode, &Error{
 			Code:       code,
 			Message:    msg,
 			RequestID:  envelope.RequestID,
@@ -154,14 +191,14 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &Error{
+		return nil, resp.StatusCode, &Error{
 			Code:       CodeUnexpectedResp,
 			Message:    fmt.Sprintf("unexpected status %d for successful response", resp.StatusCode),
 			StatusCode: resp.StatusCode,
 		}
 	}
 
-	return &envelope, nil
+	return &envelope, resp.StatusCode, nil
 }
 
 func (c *Client) GetMe(ctx context.Context) (*UserProfile, error) {

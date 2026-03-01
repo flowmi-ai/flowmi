@@ -1,0 +1,50 @@
+version: 2
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/flowmi/flowmi/cmd.version={{.Version}}
+      - -X github.com/flowmi/flowmi/cmd.commit={{.ShortCommit}}
+      - -X github.com/flowmi/flowmi/cmd.date={{.Date}}
+    binary: flowmi
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+brews:
+  - repository:
+      owner: humid888
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    skip_upload: auto
+    homepage: https://github.com/humid888/flowmi
+    description: Flowmi CLI — notes, auth, and more from your terminal
+    license: Apache-2.0
+    install: |
+      bin.install "flowmi"
+      bin.install_symlink "flowmi" => "fm"

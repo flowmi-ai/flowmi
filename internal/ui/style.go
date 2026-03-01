@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss/v2"
+import (
+	"os"
+
+	"github.com/charmbracelet/lipgloss/v2"
+)
 
 var (
 	// Title style for section headers.
@@ -24,3 +28,15 @@ var (
 	InfoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#3B82F6"))
 )
+
+func init() {
+	// Respect NO_COLOR (https://no-color.org/) and TERM=dumb.
+	if _, ok := os.LookupEnv("NO_COLOR"); ok || os.Getenv("TERM") == "dumb" {
+		plain := lipgloss.NewStyle()
+		TitleStyle = plain
+		SubtleStyle = plain
+		SuccessStyle = plain
+		ErrorStyle = plain
+		InfoStyle = plain
+	}
+}

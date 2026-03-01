@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/flowmi/flowmi/internal/api"
+	"github.com/flowmi/flowmi/internal/auth"
+	"github.com/flowmi/flowmi/internal/config"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -119,7 +123,45 @@ func newAPIClient() (*api.Client, error) {
 			WithHint("Run 'flowmi auth login' to authenticate.")
 	}
 	apiServerURL := viper.GetString("api_server_url")
-	return api.NewClient(apiServerURL, accessToken), nil
+	client := api.NewClient(apiServerURL, accessToken)
+
+	// Set up automatic token refresh on 401.
+	client.TokenRefresher = func(ctx context.Context) (string, error) {
+		refreshToken := viper.GetString("refresh_token")
+		if refreshToken == "" {
+			return "", fmt.Errorf("no refresh token available")
+		}
+		authServerURL := viper.GetString("auth_server_url")
+		tokenURL := authServerURL + "/oauth2/token"
+
+		tokens, err := auth.RefreshTokens(ctx, tokenURL, refreshToken)
+		if err != nil {
+			return "", err
+		}
+
+		// Persist the new tokens.
+		creds, _ := config.LoadCredentials()
+		if creds == nil {
+			creds = map[string]string{}
+		}
+		creds["access_token"] = tokens.AccessToken
+		if tokens.RefreshToken != "" {
+			creds["refresh_token"] = tokens.RefreshToken
+		}
+		if err := config.SaveCredentials(creds); err != nil {
+			return "", fmt.Errorf("saving refreshed credentials: %w", err)
+		}
+
+		// Update viper so subsequent calls in the same session use the new token.
+		viper.Set("access_token", tokens.AccessToken)
+		if tokens.RefreshToken != "" {
+			viper.Set("refresh_token", tokens.RefreshToken)
+		}
+
+		return tokens.AccessToken, nil
+	}
+
+	return client, nil
 }
 
 func runNoteList(cmd *cobra.Command, args []string) error {

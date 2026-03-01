@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/flowmi/flowmi/internal/api"
@@ -16,6 +17,19 @@ var knownConfigKeys = map[string]string{
 	"api_key":         "credential",
 	"auth_server_url": "config",
 	"api_server_url":  "config",
+}
+
+// sensitiveKeys are credential keys whose values should be masked in output.
+var sensitiveKeys = map[string]struct{}{
+	"api_key": {},
+}
+
+// maskValue masks a sensitive value, showing only the first 4 characters.
+func maskValue(value string) string {
+	if len(value) <= 4 {
+		return strings.Repeat("*", len(value))
+	}
+	return value[:4] + "****"
 }
 
 var configCmd = &cobra.Command{
@@ -104,6 +118,9 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		source := store
 		if value == "" {
 			source = "default"
+		}
+		if _, sensitive := sensitiveKeys[key]; sensitive && value != "" {
+			value = maskValue(value)
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\n", key, value, source)
 	}
