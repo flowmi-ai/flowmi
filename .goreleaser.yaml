@@ -38,11 +38,11 @@ changelog:
 
 brews:
   - repository:
-      owner: humid888
+      owner: flowmi-ai
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     skip_upload: auto
-    homepage: https://github.com/humid888/flowmi
+    homepage: https://github.com/flowmi-ai/flowmi
     description: Flowmi CLI — notes, auth, and more from your terminal
     license: Apache-2.0
     install: |

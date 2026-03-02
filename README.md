@@ -2,7 +2,7 @@
 
 **flowmi** (`fm`) — notes, drive, email, tables, search, and more from your terminal.
 
-[![CI](https://github.com/humid888/flowmi/actions/workflows/ci.yml/badge.svg)](https://github.com/humid888/flowmi/actions/workflows/ci.yml)
+[![CI](https://github.com/flowmi-ai/flowmi/actions/workflows/ci.yml/badge.svg)](https://github.com/flowmi-ai/flowmi/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ## Installation
@@ -10,17 +10,17 @@
 ### Homebrew (macOS)
 
 ```bash
-brew install humid888/tap/flowmi
+brew install flowmi-ai/tap/flowmi
 ```
 
 ### Download binary
 
-Download the latest release from the [Releases](https://github.com/humid888/flowmi/releases) page.
+Download the latest release from the [Releases](https://github.com/flowmi-ai/flowmi/releases) page.
 
 ### Build from source
 
 ```bash
-git clone https://github.com/humid888/flowmi.git
+git clone https://github.com/flowmi-ai/flowmi.git
 cd flowmi
 make build
 cp bin/flowmi ~/.local/bin/
