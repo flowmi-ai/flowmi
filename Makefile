@@ -3,7 +3,7 @@
 BINARY := flowmi
 
 # Build metadata
-VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+VERSION ?= $(shell V=$$(git describe --tags --abbrev=0 2>/dev/null || echo dev); echo $${V\#v})
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
