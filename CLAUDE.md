@@ -43,18 +43,20 @@ fm drive list|upload|download|view|delete     fm table list|create|view|edit|del
 fm table field add|edit|delete                fm table row list|create|view|edit|delete|query
 fm email send|list|view|delete                fm email mailbox list|create|edit|delete
 fm search [web|images|news]                   fm scrape <url>
-fm config set|get|list                        fm version | fm options
+fm config set|get|list                        fm update | fm version | fm options
+fm completion bash|zsh|fish|powershell
 ```
 
 ### Key Patterns
 
 - **Two login flows**: browser OAuth2 PKCE (default) and direct password login (`--email`/`--password` for CI/CD). Both use PKCE.
 - **Output format switch**: every display command uses the same `switch viper.GetString("output")` pattern with cases for `"json"`, `"table"`, `"text"/""`— follow this when adding commands.
-- **`newAPIClient()` helper** (`cmd/note.go`): shared constructor that reads `access_token` from Viper and returns `*api.Client`. Used by all authenticated commands.
+- **`newAPIClient()` helper** (`cmd/note.go`): shared constructor that reads `access_token` from Viper, returns `*api.Client`, and wires up automatic token refresh on 401 (via `client.TokenRefresher`). Used by all authenticated commands.
 - **API envelope**: server responses use `{"success": bool, "data": ..., "error": {"code": "...", "message": "..."}}`. The `api.Client.do()` method handles unwrapping.
 - **Drive upload**: 3-step presigned URL flow — `InitUpload` → `UploadToPresignedURL` (PUT to R2) → `CompleteUpload`.
 - **Binary alias**: supports both `flowmi` and `fm` — `cmd/root.go` adapts `Use` field based on `os.Args[0]`.
-- **Config precedence**: flags → env vars (`FLOWMI_` prefix) → config.toml → credentials.toml defaults → hardcoded defaults (`auth.flowmi.ai`, `api.flowmi.ai`).
+- **Structured errors**: `api.Error` carries code, message, hint, details, and requestID. `formatError()` in `cmd/root.go` renders errors in text or JSON based on `--output`. Exit codes map from error code prefixes: `AUTH_`→3, `NETWORK_`→4, `VALIDATION_`→2, `SERVER_`→5, default→1.
+- **Config precedence**: flags → env vars (`FLOWMI_` prefix) → config.toml → credentials.toml defaults → hardcoded defaults (`flowmi.ai`, `api.flowmi.ai`).
 - **Struct passing**: always pass structs by pointer (`*T`), not by value. This applies to function parameters, return values, and method receivers.
 - **Vendored deps**: uses `vendor/` directory — run `go mod vendor` after adding/updating dependencies.
 
@@ -89,7 +91,7 @@ Flowmi is an OAuth2 PKCE auth ecosystem with three independent repos:
 
 ## GitHub
 
-All Flowmi repos are under the **humid888** account. Run `gh auth switch` to humid888 before pushing, creating PRs, etc.
+All Flowmi repos are under the **flowmi-ai** organization. The git remote uses the `humid` SSH alias (`git@humid:flowmi-ai/flowmi.git`). Run `gh auth switch` to the appropriate account before pushing, creating PRs, etc.
 
 ## Decision Making
 
