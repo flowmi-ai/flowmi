@@ -19,13 +19,14 @@ type Column struct {
 }
 
 type Table struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"userId"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Columns     []*Column `json:"columns"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          string     `json:"id"`
+	UserID      string     `json:"userId"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Columns     []*Column  `json:"columns"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+	DeletedAt   *time.Time `json:"deletedAt,omitempty"`
 }
 
 type TableListResponse struct {
@@ -68,6 +69,7 @@ type Row struct {
 	Data      map[string]any `json:"data"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt *time.Time     `json:"deletedAt,omitempty"`
 }
 
 type RowListResponse struct {
@@ -348,4 +350,98 @@ func (c *Client) QueryRows(ctx context.Context, tableID string, req *QueryReques
 		return nil, fmt.Errorf("decoding row list: %w", err)
 	}
 	return &list, nil
+}
+
+// Table trash methods
+
+func (c *Client) ListTrashedTables(ctx context.Context, page, pageSize int) (*TableListResponse, error) {
+	path := fmt.Sprintf("/api/v1/tables/trash?page=%d&pageSize=%d", page, pageSize)
+	resp, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var list TableListResponse
+	if err := json.Unmarshal(resp.Data, &list); err != nil {
+		return nil, fmt.Errorf("decoding trashed table list: %w", err)
+	}
+	return &list, nil
+}
+
+func (c *Client) GetTrashedTable(ctx context.Context, id string) (*Table, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/tables/trash/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var table Table
+	if err := json.Unmarshal(resp.Data, &table); err != nil {
+		return nil, fmt.Errorf("decoding table: %w", err)
+	}
+	return &table, nil
+}
+
+func (c *Client) RestoreTable(ctx context.Context, id string) (*Table, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tables/trash/"+id+"/restore", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var table Table
+	if err := json.Unmarshal(resp.Data, &table); err != nil {
+		return nil, fmt.Errorf("decoding table: %w", err)
+	}
+	return &table, nil
+}
+
+func (c *Client) PermanentlyDeleteTable(ctx context.Context, id string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/api/v1/tables/trash/"+id, nil)
+	return err
+}
+
+// Row trash methods
+
+func (c *Client) ListTrashedRows(ctx context.Context, tableID string, page, pageSize int) (*RowListResponse, error) {
+	path := fmt.Sprintf("/api/v1/tables/%s/rows/trash?page=%d&pageSize=%d", tableID, page, pageSize)
+	resp, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var list RowListResponse
+	if err := json.Unmarshal(resp.Data, &list); err != nil {
+		return nil, fmt.Errorf("decoding trashed row list: %w", err)
+	}
+	return &list, nil
+}
+
+func (c *Client) GetTrashedRow(ctx context.Context, tableID, rowID string) (*Row, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/tables/"+tableID+"/rows/trash/"+rowID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var row Row
+	if err := json.Unmarshal(resp.Data, &row); err != nil {
+		return nil, fmt.Errorf("decoding row: %w", err)
+	}
+	return &row, nil
+}
+
+func (c *Client) RestoreRow(ctx context.Context, tableID, rowID string) (*Row, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/tables/"+tableID+"/rows/trash/"+rowID+"/restore", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var row Row
+	if err := json.Unmarshal(resp.Data, &row); err != nil {
+		return nil, fmt.Errorf("decoding row: %w", err)
+	}
+	return &row, nil
+}
+
+func (c *Client) PermanentlyDeleteRow(ctx context.Context, tableID, rowID string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/api/v1/tables/"+tableID+"/rows/trash/"+rowID, nil)
+	return err
 }

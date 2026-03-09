@@ -59,9 +59,53 @@ var tableEditCmd = &cobra.Command{
 var tableDeleteCmd = &cobra.Command{
 	Use:     "delete <table-id>",
 	Short:   "Delete a table",
+	Long:    `Move a table to trash. Use "table trash" to list trashed tables and "table restore" to recover them.`,
 	Example: `  fm table delete <table-id>`,
 	Args:    cobra.ExactArgs(1),
 	RunE:    runTableDelete,
+}
+
+var tableTrashCmd = &cobra.Command{
+	Use:   "trash",
+	Short: "Manage tables in trash",
+	Long:  `List, view, restore, and permanently delete trashed tables. Running without a subcommand lists trashed tables.`,
+	RunE:  runTableTrash,
+}
+
+var tableTrashListCmd = &cobra.Command{
+	Use:     "list",
+	Short:   "List tables in trash",
+	Aliases: []string{"ls"},
+	RunE:    runTableTrash,
+}
+
+var tableTrashViewCmd = &cobra.Command{
+	Use:   "view <table-id>",
+	Short: "View a trashed table",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTableTrashView,
+}
+
+var tableTrashRestoreCmd = &cobra.Command{
+	Use:   "restore <table-id>",
+	Short: "Restore a table from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTableRestore,
+}
+
+var tableTrashDeleteCmd = &cobra.Command{
+	Use:   "delete <table-id>",
+	Short: "Permanently delete a trashed table",
+	Long:  `Permanently delete a table from trash. This action is irreversible.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTableTrashDelete,
+}
+
+var tableRestoreCmd = &cobra.Command{
+	Use:   "restore <table-id>",
+	Short: "Restore a table from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTableRestore,
 }
 
 func init() {
@@ -76,11 +120,21 @@ func init() {
 	tableEditCmd.Flags().StringP("name", "n", "", "new name")
 	tableEditCmd.Flags().StringP("description", "d", "", "new description")
 
+	tableTrashCmd.Flags().IntP("limit", "L", 30, "maximum number of tables to list")
+	tableTrashListCmd.Flags().IntP("limit", "L", 30, "maximum number of tables to list")
+
+	tableTrashCmd.AddCommand(tableTrashListCmd)
+	tableTrashCmd.AddCommand(tableTrashViewCmd)
+	tableTrashCmd.AddCommand(tableTrashRestoreCmd)
+	tableTrashCmd.AddCommand(tableTrashDeleteCmd)
+
 	tableCmd.AddCommand(tableListCmd)
 	tableCmd.AddCommand(tableCreateCmd)
 	tableCmd.AddCommand(tableViewCmd)
 	tableCmd.AddCommand(tableEditCmd)
 	tableCmd.AddCommand(tableDeleteCmd)
+	tableCmd.AddCommand(tableTrashCmd)
+	tableCmd.AddCommand(tableRestoreCmd)
 
 	rootCmd.AddCommand(tableCmd)
 }
@@ -302,6 +356,135 @@ func runTableDelete(cmd *cobra.Command, args []string) error {
 		return enc.Encode(map[string]string{"id": args[0], "status": "deleted"})
 	default:
 		fmt.Fprintf(cmd.OutOrStdout(), "Table deleted: %s\n", args[0])
+		return nil
+	}
+}
+
+func runTableTrash(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	limit, _ := cmd.Flags().GetInt("limit")
+
+	list, err := client.ListTrashedTables(cmd.Context(), 1, limit)
+	if err != nil {
+		return fmt.Errorf("listing trashed tables: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(list)
+	case "table":
+		return printTableTrashTable(cmd, list)
+	case "text", "":
+		return printTableTrashText(cmd, list)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func printTableTrashText(cmd *cobra.Command, list *api.TableListResponse) error {
+	w := cmd.OutOrStdout()
+	if len(list.Items) == 0 {
+		fmt.Fprintln(w, "Trash is empty.")
+		return nil
+	}
+	fmt.Fprintf(w, "Showing %d of %d trashed tables\n\n", len(list.Items), list.Total)
+	for _, t := range list.Items {
+		deletedAt := ""
+		if t.DeletedAt != nil {
+			deletedAt = t.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "  %s  %s  %s  %d cols\n", t.ID, deletedAt, truncate(t.Name, 30), len(t.Columns))
+	}
+	return nil
+}
+
+func printTableTrashTable(cmd *cobra.Command, list *api.TableListResponse) error {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tDELETED\tNAME\tCOLUMNS")
+	for _, t := range list.Items {
+		deletedAt := ""
+		if t.DeletedAt != nil {
+			deletedAt = t.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\n", t.ID, deletedAt, truncate(t.Name, 30), len(t.Columns))
+	}
+	return w.Flush()
+}
+
+func runTableTrashView(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	table, err := client.GetTrashedTable(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("getting trashed table: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(table)
+	case "table":
+		return printTableViewTable(cmd, table)
+	case "text", "":
+		return printTableViewText(cmd, table)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func runTableRestore(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	table, err := client.RestoreTable(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("restoring table: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(table)
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Table restored: %s (id=%s)\n", table.Name, table.ID)
+		return nil
+	}
+}
+
+func runTableTrashDelete(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	if err := client.PermanentlyDeleteTable(cmd.Context(), args[0]); err != nil {
+		return fmt.Errorf("permanently deleting table: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Table permanently deleted: %s\n", args[0])
 		return nil
 	}
 }

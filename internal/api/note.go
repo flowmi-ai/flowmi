@@ -129,8 +129,8 @@ func (c *Client) DeleteNote(ctx context.Context, id string) (*Note, error) {
 	return &note, nil
 }
 
-func (c *Client) RestoreNote(ctx context.Context, id string) (*Note, error) {
-	resp, err := c.do(ctx, http.MethodPost, "/api/v1/notes/"+id+"/restore", nil)
+func (c *Client) GetTrashedNote(ctx context.Context, id string) (*Note, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/notes/trash/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -140,4 +140,22 @@ func (c *Client) RestoreNote(ctx context.Context, id string) (*Note, error) {
 		return nil, fmt.Errorf("decoding note: %w", err)
 	}
 	return &note, nil
+}
+
+func (c *Client) RestoreNote(ctx context.Context, id string) (*Note, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/notes/trash/"+id+"/restore", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(resp.Data, &note); err != nil {
+		return nil, fmt.Errorf("decoding note: %w", err)
+	}
+	return &note, nil
+}
+
+func (c *Client) PermanentlyDeleteNote(ctx context.Context, id string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/api/v1/notes/trash/"+id, nil)
+	return err
 }

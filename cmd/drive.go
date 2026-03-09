@@ -106,11 +106,63 @@ var driveViewCmd = &cobra.Command{
 var driveDeleteCmd = &cobra.Command{
 	Use:   "delete <path-or-id>",
 	Short: "Delete a file",
+	Long:  `Move a file to trash. Use "drive trash" to list trashed files and "drive restore" to recover them.`,
 	Example: `  fm drive delete /docs/readme.txt
   fm drive delete 550e8400-e29b-41d4-a716-446655440000
   fm drive delete /docs/readme.txt -o json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDriveDelete,
+}
+
+var driveTrashCmd = &cobra.Command{
+	Use:   "trash",
+	Short: "Manage files in trash",
+	Long:  `List, view, download, restore, and permanently delete trashed files. Running without a subcommand lists trashed files.`,
+	RunE:  runDriveTrash,
+}
+
+var driveTrashListCmd = &cobra.Command{
+	Use:     "list",
+	Short:   "List files in trash",
+	Aliases: []string{"ls"},
+	RunE:    runDriveTrash,
+}
+
+var driveTrashViewCmd = &cobra.Command{
+	Use:   "view <id>",
+	Short: "View trashed file metadata",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDriveTrashView,
+}
+
+var driveTrashDownloadCmd = &cobra.Command{
+	Use:   "download <id>",
+	Short: "Download a trashed file",
+	Long:  `Download a file from trash to stdout (default) or to a local file with --dest.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDriveTrashDownload,
+}
+
+var driveTrashRestoreCmd = &cobra.Command{
+	Use:   "restore <id>",
+	Short: "Restore a file from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDriveRestore,
+}
+
+var driveTrashDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Permanently delete a trashed file",
+	Long:  `Permanently delete a file from trash. This removes the file from storage and is irreversible.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDriveTrashDelete,
+}
+
+var driveRestoreCmd = &cobra.Command{
+	Use:   "restore <id>",
+	Short: "Restore a file from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDriveRestore,
 }
 
 func init() {
@@ -123,11 +175,23 @@ func init() {
 
 	driveDownloadCmd.Flags().StringP("dest", "D", "", "destination file path")
 
+	driveTrashCmd.Flags().IntP("limit", "L", 30, "maximum number of files to list")
+	driveTrashListCmd.Flags().IntP("limit", "L", 30, "maximum number of files to list")
+	driveTrashDownloadCmd.Flags().StringP("dest", "D", "", "destination file path")
+
+	driveTrashCmd.AddCommand(driveTrashListCmd)
+	driveTrashCmd.AddCommand(driveTrashViewCmd)
+	driveTrashCmd.AddCommand(driveTrashDownloadCmd)
+	driveTrashCmd.AddCommand(driveTrashRestoreCmd)
+	driveTrashCmd.AddCommand(driveTrashDeleteCmd)
+
 	driveCmd.AddCommand(driveListCmd)
 	driveCmd.AddCommand(driveUploadCmd)
 	driveCmd.AddCommand(driveDownloadCmd)
 	driveCmd.AddCommand(driveViewCmd)
 	driveCmd.AddCommand(driveDeleteCmd)
+	driveCmd.AddCommand(driveTrashCmd)
+	driveCmd.AddCommand(driveRestoreCmd)
 
 	rootCmd.AddCommand(driveCmd)
 }
@@ -381,6 +445,173 @@ func printDriveViewTable(cmd *cobra.Command, obj *api.DriveObject) error {
 	fmt.Fprintf(w, "Created\t%s\n", obj.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "Updated\t%s\n", obj.UpdatedAt.Format("2006-01-02 15:04:05"))
 	return w.Flush()
+}
+
+func runDriveTrash(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	limit, _ := cmd.Flags().GetInt("limit")
+
+	list, err := client.ListTrashedDriveObjects(cmd.Context(), 1, limit)
+	if err != nil {
+		return fmt.Errorf("listing trashed files: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(list)
+	case "table":
+		return printDriveTrashTable(cmd, list)
+	case "text", "":
+		return printDriveTrashText(cmd, list)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func printDriveTrashText(cmd *cobra.Command, list *api.DriveListResponse) error {
+	w := cmd.OutOrStdout()
+	if len(list.Items) == 0 {
+		fmt.Fprintln(w, "Trash is empty.")
+		return nil
+	}
+	fmt.Fprintf(w, "Showing %d of %d trashed files\n\n", len(list.Items), list.Total)
+	for _, obj := range list.Items {
+		deletedAt := ""
+		if obj.DeletedAt != nil {
+			deletedAt = obj.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "  %s  %s  %s  %s\n", obj.ID, deletedAt, formatSize(obj.SizeBytes), obj.Path)
+	}
+	return nil
+}
+
+func printDriveTrashTable(cmd *cobra.Command, list *api.DriveListResponse) error {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tDELETED\tSIZE\tPATH")
+	for _, obj := range list.Items {
+		deletedAt := ""
+		if obj.DeletedAt != nil {
+			deletedAt = obj.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", obj.ID, deletedAt, formatSize(obj.SizeBytes), obj.Path)
+	}
+	return w.Flush()
+}
+
+func runDriveTrashView(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	obj, err := client.GetTrashedDriveObject(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("getting trashed file: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(obj)
+	case "table":
+		return printDriveViewTable(cmd, obj)
+	case "text", "":
+		return printDriveViewText(cmd, obj)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func runDriveTrashDownload(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	dest, _ := cmd.Flags().GetString("dest")
+
+	dlResp, err := client.GetTrashedDownloadURL(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("getting download URL: %w", err)
+	}
+
+	body, err := client.DownloadFromURL(cmd.Context(), dlResp.DownloadURL)
+	if err != nil {
+		return fmt.Errorf("downloading file: %w", err)
+	}
+	defer body.Close()
+
+	if dest != "" {
+		f, err := os.Create(dest)
+		if err != nil {
+			return fmt.Errorf("creating file: %w", err)
+		}
+		defer f.Close()
+
+		n, err := io.Copy(f, body)
+		if err != nil {
+			return fmt.Errorf("writing file: %w", err)
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "Downloaded %s to %s\n", formatSize(n), dest)
+		return nil
+	}
+
+	_, err = io.Copy(cmd.OutOrStdout(), body)
+	return err
+}
+
+func runDriveRestore(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	obj, err := client.RestoreDriveObject(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("restoring file: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(obj)
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "File restored: %s (id=%s)\n", obj.Path, obj.ID)
+		return nil
+	}
+}
+
+func runDriveTrashDelete(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	if err := client.PermanentlyDeleteDriveObject(cmd.Context(), args[0]); err != nil {
+		return fmt.Errorf("permanently deleting file: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "File permanently deleted: %s\n", args[0])
+		return nil
+	}
 }
 
 func runDriveDelete(cmd *cobra.Command, args []string) error {

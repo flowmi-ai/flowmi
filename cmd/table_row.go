@@ -62,9 +62,55 @@ var tableRowEditCmd = &cobra.Command{
 var tableRowDeleteCmd = &cobra.Command{
 	Use:     "delete <table-id> <row-id>",
 	Short:   "Delete a row",
+	Long:    `Move a row to trash. Use "table row trash" to list trashed rows and "table row restore" to recover them.`,
 	Example: `  fm table row delete <table-id> <row-id>`,
 	Args:    cobra.ExactArgs(2),
 	RunE:    runTableRowDelete,
+}
+
+var tableRowTrashCmd = &cobra.Command{
+	Use:   "trash <table-id>",
+	Short: "Manage rows in trash",
+	Long:  `List, view, restore, and permanently delete trashed rows. Running without a subcommand lists trashed rows.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTableRowTrash,
+}
+
+var tableRowTrashListCmd = &cobra.Command{
+	Use:     "list <table-id>",
+	Short:   "List rows in trash",
+	Aliases: []string{"ls"},
+	Args:    cobra.ExactArgs(1),
+	RunE:    runTableRowTrash,
+}
+
+var tableRowTrashViewCmd = &cobra.Command{
+	Use:   "view <table-id> <row-id>",
+	Short: "View a trashed row",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runTableRowTrashView,
+}
+
+var tableRowTrashRestoreCmd = &cobra.Command{
+	Use:   "restore <table-id> <row-id>",
+	Short: "Restore a row from trash",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runTableRowRestore,
+}
+
+var tableRowTrashDeleteCmd = &cobra.Command{
+	Use:   "delete <table-id> <row-id>",
+	Short: "Permanently delete a trashed row",
+	Long:  `Permanently delete a row from trash. This action is irreversible.`,
+	Args:  cobra.ExactArgs(2),
+	RunE:  runTableRowTrashDelete,
+}
+
+var tableRowRestoreCmd = &cobra.Command{
+	Use:   "restore <table-id> <row-id>",
+	Short: "Restore a row from trash",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runTableRowRestore,
 }
 
 var tableRowQueryCmd = &cobra.Command{
@@ -100,12 +146,22 @@ func init() {
 	tableRowQueryCmd.Flags().IntP("limit", "L", 30, "maximum number of rows")
 	tableRowQueryCmd.Flags().IntP("page", "p", 1, "page number")
 
+	tableRowTrashCmd.Flags().IntP("limit", "L", 30, "maximum number of rows to list")
+	tableRowTrashListCmd.Flags().IntP("limit", "L", 30, "maximum number of rows to list")
+
+	tableRowTrashCmd.AddCommand(tableRowTrashListCmd)
+	tableRowTrashCmd.AddCommand(tableRowTrashViewCmd)
+	tableRowTrashCmd.AddCommand(tableRowTrashRestoreCmd)
+	tableRowTrashCmd.AddCommand(tableRowTrashDeleteCmd)
+
 	tableRowCmd.AddCommand(tableRowListCmd)
 	tableRowCmd.AddCommand(tableRowCreateCmd)
 	tableRowCmd.AddCommand(tableRowViewCmd)
 	tableRowCmd.AddCommand(tableRowEditCmd)
 	tableRowCmd.AddCommand(tableRowDeleteCmd)
 	tableRowCmd.AddCommand(tableRowQueryCmd)
+	tableRowCmd.AddCommand(tableRowTrashCmd)
+	tableRowCmd.AddCommand(tableRowRestoreCmd)
 
 	tableCmd.AddCommand(tableRowCmd)
 }
@@ -646,4 +702,156 @@ func printGroupByTable(cmd *cobra.Command, resp *api.GroupByResponse, groupCols,
 		fmt.Fprintln(w, strings.Join(parts, "\t"))
 	}
 	return w.Flush()
+}
+
+func runTableRowTrash(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	tableID := args[0]
+	limit, _ := cmd.Flags().GetInt("limit")
+
+	// Fetch table schema for column names
+	table, err := client.GetTable(cmd.Context(), tableID)
+	if err != nil {
+		// Table might be trashed too, try getting trashed table
+		table, err = client.GetTrashedTable(cmd.Context(), tableID)
+		if err != nil {
+			return fmt.Errorf("getting table schema: %w", err)
+		}
+	}
+
+	list, err := client.ListTrashedRows(cmd.Context(), tableID, 1, limit)
+	if err != nil {
+		return fmt.Errorf("listing trashed rows: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(list)
+	case "table":
+		return printRowTrashTable(cmd, table, list)
+	case "text", "":
+		return printRowTrashText(cmd, table, list)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func printRowTrashText(cmd *cobra.Command, table *api.Table, list *api.RowListResponse) error {
+	w := cmd.OutOrStdout()
+	if len(list.Items) == 0 {
+		fmt.Fprintln(w, "Trash is empty.")
+		return nil
+	}
+	fmt.Fprintf(w, "Showing %d of %d trashed rows\n\n", len(list.Items), list.Total)
+	for _, row := range list.Items {
+		deletedAt := ""
+		if row.DeletedAt != nil {
+			deletedAt = row.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fields := formatRowFields(table, row)
+		fmt.Fprintf(w, "  %s  %s  %s\n", row.ID, deletedAt, fields)
+	}
+	return nil
+}
+
+func printRowTrashTable(cmd *cobra.Command, table *api.Table, list *api.RowListResponse) error {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+
+	headers := []string{"ID", "DELETED"}
+	for _, col := range table.Columns {
+		headers = append(headers, strings.ToUpper(col.Name))
+	}
+	fmt.Fprintln(w, strings.Join(headers, "\t"))
+
+	for _, row := range list.Items {
+		deletedAt := ""
+		if row.DeletedAt != nil {
+			deletedAt = row.DeletedAt.Format("2006-01-02 15:04")
+		}
+		parts := []string{row.ID, deletedAt}
+		for _, col := range table.Columns {
+			val := formatCellValue(row.Data[col.Name])
+			parts = append(parts, truncate(val, 30))
+		}
+		fmt.Fprintln(w, strings.Join(parts, "\t"))
+	}
+	return w.Flush()
+}
+
+func runTableRowTrashView(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	row, err := client.GetTrashedRow(cmd.Context(), args[0], args[1])
+	if err != nil {
+		return fmt.Errorf("getting trashed row: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(row)
+	case "table":
+		return printRowViewTable(cmd, row)
+	case "text", "":
+		return printRowViewText(cmd, row)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func runTableRowRestore(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	row, err := client.RestoreRow(cmd.Context(), args[0], args[1])
+	if err != nil {
+		return fmt.Errorf("restoring row: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(row)
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Row restored: %s\n", row.ID)
+		return nil
+	}
+}
+
+func runTableRowTrashDelete(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	if err := client.PermanentlyDeleteRow(cmd.Context(), args[0], args[1]); err != nil {
+		return fmt.Errorf("permanently deleting row: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]string{"tableId": args[0], "rowId": args[1], "status": "permanently deleted"})
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Row permanently deleted: %s\n", args[1])
+		return nil
+	}
 }

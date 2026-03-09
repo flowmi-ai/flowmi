@@ -33,6 +33,7 @@ type Email struct {
 	Attachments []*Attachment `json:"attachments"`
 	SentAt      *time.Time    `json:"sentAt,omitempty"`
 	CreatedAt   time.Time     `json:"createdAt"`
+	DeletedAt   *time.Time    `json:"deletedAt,omitempty"`
 }
 
 type EmailDetail struct {
@@ -128,6 +129,54 @@ func (c *Client) GetEmail(ctx context.Context, id string) (*EmailDetail, error) 
 
 func (c *Client) DeleteEmail(ctx context.Context, id string) error {
 	_, err := c.do(ctx, http.MethodDelete, "/api/v1/email/"+id, nil)
+	return err
+}
+
+func (c *Client) ListTrashedEmails(ctx context.Context, page, pageSize int, direction string) (*EmailListResponse, error) {
+	path := fmt.Sprintf("/api/v1/email/trash?page=%d&pageSize=%d", page, pageSize)
+	if direction != "" {
+		path += "&direction=" + url.QueryEscape(direction)
+	}
+	resp, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var list EmailListResponse
+	if err := json.Unmarshal(resp.Data, &list); err != nil {
+		return nil, fmt.Errorf("decoding trashed email list: %w", err)
+	}
+	return &list, nil
+}
+
+func (c *Client) GetTrashedEmail(ctx context.Context, id string) (*EmailDetail, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/email/trash/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var email EmailDetail
+	if err := json.Unmarshal(resp.Data, &email); err != nil {
+		return nil, fmt.Errorf("decoding email: %w", err)
+	}
+	return &email, nil
+}
+
+func (c *Client) RestoreEmail(ctx context.Context, id string) (*EmailDetail, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/email/trash/"+id+"/restore", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var email EmailDetail
+	if err := json.Unmarshal(resp.Data, &email); err != nil {
+		return nil, fmt.Errorf("decoding email: %w", err)
+	}
+	return &email, nil
+}
+
+func (c *Client) PermanentlyDeleteEmail(ctx context.Context, id string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/api/v1/email/trash/"+id, nil)
 	return err
 }
 

@@ -23,6 +23,7 @@ type DriveObject struct {
 	Properties map[string]any `json:"properties"`
 	CreatedAt  time.Time      `json:"createdAt"`
 	UpdatedAt  time.Time      `json:"updatedAt"`
+	DeletedAt  *time.Time     `json:"deletedAt,omitempty"`
 }
 
 type DriveListResponse struct {
@@ -121,6 +122,64 @@ func (c *Client) DeleteDriveObjectByPath(ctx context.Context, path string) (*Dri
 		return nil, fmt.Errorf("decoding drive object: %w", err)
 	}
 	return &obj, nil
+}
+
+func (c *Client) ListTrashedDriveObjects(ctx context.Context, page, pageSize int) (*DriveListResponse, error) {
+	path := fmt.Sprintf("/api/v1/drive/trash?page=%d&pageSize=%d", page, pageSize)
+	resp, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var list DriveListResponse
+	if err := json.Unmarshal(resp.Data, &list); err != nil {
+		return nil, fmt.Errorf("decoding trashed drive object list: %w", err)
+	}
+	return &list, nil
+}
+
+func (c *Client) GetTrashedDriveObject(ctx context.Context, id string) (*DriveObject, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/drive/trash/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var obj DriveObject
+	if err := json.Unmarshal(resp.Data, &obj); err != nil {
+		return nil, fmt.Errorf("decoding drive object: %w", err)
+	}
+	return &obj, nil
+}
+
+func (c *Client) GetTrashedDownloadURL(ctx context.Context, id string) (*DownloadResponse, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/drive/trash/"+id+"/download", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result DownloadResponse
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		return nil, fmt.Errorf("decoding download response: %w", err)
+	}
+	return &result, nil
+}
+
+func (c *Client) RestoreDriveObject(ctx context.Context, id string) (*DriveObject, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/drive/trash/"+id+"/restore", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var obj DriveObject
+	if err := json.Unmarshal(resp.Data, &obj); err != nil {
+		return nil, fmt.Errorf("decoding drive object: %w", err)
+	}
+	return &obj, nil
+}
+
+func (c *Client) PermanentlyDeleteDriveObject(ctx context.Context, id string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/api/v1/drive/trash/"+id, nil)
+	return err
 }
 
 func (c *Client) InitUpload(ctx context.Context, req *InitUploadRequest) (*InitUploadResponse, error) {

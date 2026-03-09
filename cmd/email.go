@@ -48,9 +48,53 @@ var emailSendCmd = &cobra.Command{
 var emailDeleteCmd = &cobra.Command{
 	Use:     "delete <id>",
 	Short:   "Delete an email",
+	Long:    `Move an email to trash. Use "email trash" to list trashed emails and "email restore" to recover them.`,
 	Example: `  fm email delete <id>`,
 	Args:    cobra.ExactArgs(1),
 	RunE:    runEmailDelete,
+}
+
+var emailTrashCmd = &cobra.Command{
+	Use:   "trash",
+	Short: "Manage emails in trash",
+	Long:  `List, view, restore, and permanently delete trashed emails. Running without a subcommand lists trashed emails.`,
+	RunE:  runEmailTrash,
+}
+
+var emailTrashListCmd = &cobra.Command{
+	Use:     "list",
+	Short:   "List emails in trash",
+	Aliases: []string{"ls"},
+	RunE:    runEmailTrash,
+}
+
+var emailTrashViewCmd = &cobra.Command{
+	Use:   "view <id>",
+	Short: "View a trashed email",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runEmailTrashView,
+}
+
+var emailTrashRestoreCmd = &cobra.Command{
+	Use:   "restore <id>",
+	Short: "Restore an email from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runEmailRestore,
+}
+
+var emailTrashDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Permanently delete a trashed email",
+	Long:  `Permanently delete an email from trash. This action is irreversible.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  runEmailTrashDelete,
+}
+
+var emailRestoreCmd = &cobra.Command{
+	Use:   "restore <id>",
+	Short: "Restore an email from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runEmailRestore,
 }
 
 func init() {
@@ -69,10 +113,22 @@ func init() {
 	emailSendCmd.MarkFlagRequired("to")
 	emailSendCmd.MarkFlagRequired("subject")
 
+	emailTrashCmd.Flags().IntP("limit", "L", 30, "maximum number of emails to list")
+	emailTrashCmd.Flags().StringP("direction", "d", "", "filter by direction (inbound, outbound)")
+	emailTrashListCmd.Flags().IntP("limit", "L", 30, "maximum number of emails to list")
+	emailTrashListCmd.Flags().StringP("direction", "d", "", "filter by direction (inbound, outbound)")
+
+	emailTrashCmd.AddCommand(emailTrashListCmd)
+	emailTrashCmd.AddCommand(emailTrashViewCmd)
+	emailTrashCmd.AddCommand(emailTrashRestoreCmd)
+	emailTrashCmd.AddCommand(emailTrashDeleteCmd)
+
 	emailCmd.AddCommand(emailListCmd)
 	emailCmd.AddCommand(emailViewCmd)
 	emailCmd.AddCommand(emailSendCmd)
 	emailCmd.AddCommand(emailDeleteCmd)
+	emailCmd.AddCommand(emailTrashCmd)
+	emailCmd.AddCommand(emailRestoreCmd)
 
 	rootCmd.AddCommand(emailCmd)
 }
@@ -250,6 +306,136 @@ func runEmailSend(cmd *cobra.Command, args []string) error {
 		return enc.Encode(email)
 	default:
 		fmt.Fprintf(cmd.OutOrStdout(), "Email sent: %s\n", email.ID)
+		return nil
+	}
+}
+
+func runEmailTrash(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	limit, _ := cmd.Flags().GetInt("limit")
+	direction, _ := cmd.Flags().GetString("direction")
+
+	list, err := client.ListTrashedEmails(cmd.Context(), 1, limit, direction)
+	if err != nil {
+		return fmt.Errorf("listing trashed emails: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(list)
+	case "table":
+		return printEmailTrashTable(cmd, list)
+	case "text", "":
+		return printEmailTrashText(cmd, list)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func printEmailTrashText(cmd *cobra.Command, list *api.EmailListResponse) error {
+	w := cmd.OutOrStdout()
+	if len(list.Items) == 0 {
+		fmt.Fprintln(w, "Trash is empty.")
+		return nil
+	}
+	fmt.Fprintf(w, "Showing %d of %d trashed emails\n\n", len(list.Items), list.Total)
+	for _, e := range list.Items {
+		deletedAt := ""
+		if e.DeletedAt != nil {
+			deletedAt = e.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "  %s  %s  %s  %s  %s\n", e.ID, deletedAt, e.Direction, e.From, truncate(e.Subject, 40))
+	}
+	return nil
+}
+
+func printEmailTrashTable(cmd *cobra.Command, list *api.EmailListResponse) error {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tDELETED\tDIRECTION\tFROM\tSUBJECT")
+	for _, e := range list.Items {
+		deletedAt := ""
+		if e.DeletedAt != nil {
+			deletedAt = e.DeletedAt.Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.ID, deletedAt, e.Direction, e.From, truncate(e.Subject, 30))
+	}
+	return w.Flush()
+}
+
+func runEmailTrashView(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	email, err := client.GetTrashedEmail(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("getting trashed email: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(email)
+	case "table":
+		return printEmailViewTable(cmd, email)
+	case "text", "":
+		return printEmailViewText(cmd, email)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func runEmailRestore(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	email, err := client.RestoreEmail(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("restoring email: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(email)
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Email restored: %s\n", email.ID)
+		return nil
+	}
+}
+
+func runEmailTrashDelete(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	if err := client.PermanentlyDeleteEmail(cmd.Context(), args[0]); err != nil {
+		return fmt.Errorf("permanently deleting email: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Email permanently deleted: %s\n", args[0])
 		return nil
 	}
 }

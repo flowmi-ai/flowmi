@@ -71,15 +71,45 @@ var noteEditCmd = &cobra.Command{
 var noteDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
 	Short: "Delete a note",
-	Long:  `Move a note to trash. Use "note trash" to list trashed notes and "note restore" to recover them.`,
+	Long:  `Move a note to trash. Use "note trash" to list trashed notes and "note restore" or "note trash restore" to recover them.`,
 	Args:  cobra.ExactArgs(1),
 	RunE:  runNoteDelete,
 }
 
 var noteTrashCmd = &cobra.Command{
 	Use:   "trash",
-	Short: "List notes in trash",
+	Short: "Manage notes in trash",
+	Long:  `List, view, restore, and permanently delete trashed notes. Running without a subcommand lists trashed notes.`,
 	RunE:  runNoteTrash,
+}
+
+var noteTrashListCmd = &cobra.Command{
+	Use:     "list",
+	Short:   "List notes in trash",
+	Aliases: []string{"ls"},
+	RunE:    runNoteTrash,
+}
+
+var noteTrashViewCmd = &cobra.Command{
+	Use:   "view <id>",
+	Short: "View a trashed note",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runNoteTrashView,
+}
+
+var noteTrashRestoreCmd = &cobra.Command{
+	Use:   "restore <id>",
+	Short: "Restore a note from trash",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runNoteRestore,
+}
+
+var noteTrashDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Permanently delete a trashed note",
+	Long:  `Permanently delete a note from trash. This action is irreversible.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  runNoteTrashDelete,
 }
 
 var noteRestoreCmd = &cobra.Command{
@@ -104,6 +134,12 @@ func init() {
 	noteEditCmd.Flags().StringSliceP("label", "l", nil, "set labels (repeatable, comma-separated, replaces all)")
 
 	noteTrashCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
+	noteTrashListCmd.Flags().IntP("limit", "L", 30, "maximum number of notes to list")
+
+	noteTrashCmd.AddCommand(noteTrashListCmd)
+	noteTrashCmd.AddCommand(noteTrashViewCmd)
+	noteTrashCmd.AddCommand(noteTrashRestoreCmd)
+	noteTrashCmd.AddCommand(noteTrashDeleteCmd)
 
 	noteCmd.AddCommand(noteListCmd)
 	noteCmd.AddCommand(noteCreateCmd)
@@ -416,6 +452,54 @@ func printTrashTable(cmd *cobra.Command, list *api.NoteListResponse) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", n.ID, deletedAt, truncate(n.Subject, 30), truncate(n.Content, 40))
 	}
 	return w.Flush()
+}
+
+func runNoteTrashView(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	note, err := client.GetTrashedNote(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("getting trashed note: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(note)
+	case "table":
+		return printNoteTable(cmd, note)
+	case "text", "":
+		return printNoteText(cmd, note)
+	default:
+		return fmt.Errorf("unsupported output format: %s", output)
+	}
+}
+
+func runNoteTrashDelete(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	if err := client.PermanentlyDeleteNote(cmd.Context(), args[0]); err != nil {
+		return fmt.Errorf("permanently deleting note: %w", err)
+	}
+
+	output := viper.GetString("output")
+	switch output {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Note permanently deleted: %s\n", args[0])
+		return nil
+	}
 }
 
 func runNoteRestore(cmd *cobra.Command, args []string) error {
