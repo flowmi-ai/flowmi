@@ -11,11 +11,19 @@
 curl -fsSL https://flowmi.ai/install | bash
 ```
 
-### Homebrew <!-- macOS and Linux (recommended, always up to date) -->
+### Homebrew 
 
 ```bash
-brew install flowmi-ai/tap/flowmi
+brew install flowmi-ai/tap/flowmi # macOS and Linux (recommended, always up to date)
 ```
+
+### Go
+
+```bash
+go install github.com/flowmi-ai/flowmi@latest
+```
+
+Requires Go 1.25+.
 
 ### Download binary
 
@@ -31,6 +39,12 @@ cp bin/flowmi ~/.local/bin/
 ```
 
 Requires Go 1.25+.
+
+> **Note:** The curl installer and Homebrew automatically create the `fm` shorthand. For other methods, add it yourself:
+>
+> ```bash
+> ln -sf $(which flowmi) $(dirname $(which flowmi))/fm
+> ```
 
 ## Quick start
 
