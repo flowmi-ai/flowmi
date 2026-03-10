@@ -1,6 +1,6 @@
 # Flowmi CLI
 
-**flowmi** (`fm`) — notes, drive, email, tables, search, and more from your terminal.
+**flowmi** — notes, drive, email, tables, search, and more from your terminal.
 
 [![CI](https://github.com/flowmi-ai/flowmi/actions/workflows/ci.yml/badge.svg)](https://github.com/flowmi-ai/flowmi/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -11,7 +11,7 @@
 curl -fsSL https://flowmi.ai/install | bash
 ```
 
-### Homebrew 
+### Homebrew
 
 ```bash
 brew install flowmi-ai/tap/flowmi # macOS and Linux (recommended, always up to date)
@@ -40,71 +40,67 @@ cp bin/flowmi ~/.local/bin/
 
 Requires Go 1.25+.
 
-> **Note:** The curl installer and Homebrew automatically create the `fm` shorthand. For other methods, add it yourself:
->
-> ```bash
-> ln -sf $(which flowmi) $(dirname $(which flowmi))/fm
-> ```
-
 ## Quick start
 
 ```bash
 # Authenticate (opens browser for OAuth2 PKCE flow)
-fm auth login
+flowmi auth login
 
 # Or use email/password for CI/CD
-fm auth login --email user@example.com --password '...'
+flowmi auth login --email user@example.com --password '...'
 
 # Check auth status
-fm auth status
+flowmi auth status
 
 # Create a note
-fm note create --subject "Hello" --content "My first note"
+flowmi note create --subject "Hello" --content "My first note"
 
 # List notes
-fm note list
+flowmi note list
 
 # Upload a file
-fm drive upload ./report.pdf
+flowmi drive upload ./report.pdf
 
 # Send an email
-fm email send --to user@example.com --subject "Hi" --body "Hello from Flowmi"
+flowmi email send --to user@example.com --subject "Hi" --text "Hello from Flowmi"
 
 # Web search
-fm search "golang best practices"
+flowmi search "golang best practices"
 
 # Scrape a webpage
-fm scrape https://example.com
+flowmi scrape https://example.com
 ```
 
 ## Commands
 
 ```
-fm auth login|status              Authentication
-fm note list|create|view|edit|delete|trash|restore   Notes
-fm drive list|upload|download|view|delete             Cloud drive
-fm table list|create|view|edit|delete                 Tables
-fm table field add|edit|delete                        Table fields
-fm table row list|create|view|edit|delete|query       Table rows
-fm email send|list|view|delete                        Email
-fm email mailbox list|create|edit|delete              Mailboxes
-fm search [web|images|news]                           Web search
-fm scrape <url>                                       Web scraping
-fm config set|get|list                                Configuration
-fm completion bash|zsh|fish|powershell                Shell completion
-fm version                                            Version info
+flowmi auth login|status                                   Authentication
+flowmi note list|create|view|edit|delete|trash|restore     Notes
+flowmi drive list|upload|download|view|delete|trash|restore   Cloud drive
+flowmi table list|create|view|edit|delete|trash|restore    Tables
+flowmi table field add|edit|delete                         Table fields
+flowmi table row list|create|view|edit|delete|query|trash|restore   Table rows
+flowmi email send|list|view|delete|trash|restore           Email
+flowmi email mailbox list|create|edit|delete               Mailboxes
+flowmi search [web|images|news]                            Web search
+flowmi scrape <url>                                        Web scraping
+flowmi config set|get|list                                 Configuration
+flowmi update                                              Update to latest version
+flowmi completion bash|zsh|fish|powershell                 Shell completion
+flowmi version                                             Version info
+flowmi options                                             Show global flags
 ```
 
-Use `fm <command> --help` for detailed usage of any command.
+Use `flowmi <command> --help` for detailed usage of any command.
 
 ## Output formats
 
 All commands support `--output` (`-o`) to control output format:
 
 ```bash
-fm note list -o json     # JSON output
-fm note list -o table    # Table output
-fm note list -o text     # Text output (default)
+flowmi note list -o json     # JSON output
+flowmi note list -o table    # Table output
+flowmi note list -o text     # Text output (default)
 ```
 
 ## Configuration
@@ -115,9 +111,9 @@ Configuration is stored in `~/.config/flowmi/` (XDG-compliant):
 - `credentials.toml` — tokens and API keys (0600 permissions)
 
 ```bash
-fm config list              # Show all config values
-fm config set api_key sk-...  # Set a value
-fm config get api_server_url  # Get a value
+flowmi config list              # Show all config values
+flowmi config set api_key sk-...  # Set a value
+flowmi config get api_server_url  # Get a value
 ```
 
 Environment variables with the `FLOWMI_` prefix override config file values (e.g., `FLOWMI_API_KEY`).
@@ -126,13 +122,13 @@ Environment variables with the `FLOWMI_` prefix override config file values (e.g
 
 ```bash
 # Bash
-source <(fm completion bash)
+source <(flowmi completion bash)
 
 # Zsh
-fm completion zsh > "${fpath[1]}/_flowmi"
+flowmi completion zsh > "${fpath[1]}/_flowmi"
 
 # Fish
-fm completion fish | source
+flowmi completion fish | source
 ```
 
 ## License
