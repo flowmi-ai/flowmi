@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
 
 // TokenRefresher is a callback that refreshes the access token.
@@ -19,7 +20,7 @@ type TokenRefresher func(ctx context.Context) (newAccessToken string, err error)
 type Client struct {
 	BaseURL        string
 	AccessToken    string
-	HTTPClient     *http.Client
+	HTTPClient     *resty.Client
 	TokenRefresher TokenRefresher
 }
 
@@ -47,7 +48,7 @@ func NewClient(baseURL, accessToken string) *Client {
 	return &Client{
 		BaseURL:     baseURL,
 		AccessToken: accessToken,
-		HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+		HTTPClient:  resty.New().SetTimeout(30 * time.Second).SetResponseBodyLimit(1 << 20),
 	}
 }
 
@@ -78,26 +79,17 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 }
 
 func (c *Client) doOnce(ctx context.Context, method, path string, reqBody []byte) (*Response, int, error) {
-	var bodyReader io.Reader
+	req := c.HTTPClient.R().
+		SetContext(ctx).
+		SetHeader("Authorization", "Bearer "+c.AccessToken).
+		SetHeader("Accept", "application/json")
+
 	if reqBody != nil {
-		bodyReader = bytes.NewReader(reqBody)
+		req.SetHeader("Content-Type", "application/json").
+			SetBody(reqBody)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
-	if err != nil {
-		return nil, 0, &Error{
-			Code:    CodeNetworkError,
-			Message: fmt.Sprintf("creating request: %s", err),
-			Cause:   err,
-		}
-	}
-	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
-	req.Header.Set("Accept", "application/json")
-	if reqBody != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := req.Execute(method, c.BaseURL+path)
 	if err != nil {
 		return nil, 0, &Error{
 			Code:    CodeNetworkError,
@@ -105,30 +97,23 @@ func (c *Client) doOnce(ctx context.Context, method, path string, reqBody []byte
 			Cause:   err,
 		}
 	}
-	defer resp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, resp.StatusCode, &Error{
-			Code:    CodeNetworkError,
-			Message: fmt.Sprintf("reading response: %s", err),
-			Cause:   err,
-		}
-	}
+	statusCode := resp.StatusCode()
+	bodyBytes := resp.Body()
 
 	var envelope Response
 	if err := json.Unmarshal(bodyBytes, &envelope); err != nil {
 		snippet := strings.TrimSpace(string(bodyBytes))
 		if snippet == "" {
-			snippet = http.StatusText(resp.StatusCode)
+			snippet = http.StatusText(statusCode)
 		}
 		if len(snippet) > 200 {
 			snippet = snippet[:200] + "..."
 		}
-		return nil, resp.StatusCode, &Error{
+		return nil, statusCode, &Error{
 			Code:       CodeUnexpectedResp,
-			Message:    fmt.Sprintf("unexpected response (status %d): %s", resp.StatusCode, snippet),
-			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("unexpected response (status %d): %s", statusCode, snippet),
+			StatusCode: statusCode,
 			Cause:      err,
 		}
 	}
@@ -148,25 +133,25 @@ func (c *Client) doOnce(ctx context.Context, method, path string, reqBody []byte
 			hint = envelope.Error.Hint
 			details = envelope.Error.Details
 		}
-		return nil, resp.StatusCode, &Error{
+		return nil, statusCode, &Error{
 			Code:       code,
 			Message:    msg,
 			RequestID:  envelope.RequestID,
-			StatusCode: resp.StatusCode,
+			StatusCode: statusCode,
 			Hint:       hint,
 			Details:    details,
 		}
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, resp.StatusCode, &Error{
+	if statusCode < 200 || statusCode >= 300 {
+		return nil, statusCode, &Error{
 			Code:       CodeUnexpectedResp,
-			Message:    fmt.Sprintf("unexpected status %d for successful response", resp.StatusCode),
-			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("unexpected status %d for successful response", statusCode),
+			StatusCode: statusCode,
 		}
 	}
 
-	return &envelope, resp.StatusCode, nil
+	return &envelope, statusCode, nil
 }
 
 func (c *Client) GetMe(ctx context.Context) (*UserProfile, error) {

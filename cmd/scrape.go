@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -26,6 +27,7 @@ func runScrape(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	client.HTTPClient.SetTimeout(60 * time.Second)
 
 	result, err := client.Scrape(cmd.Context(), &api.ScrapeRequest{
 		URL:             args[0],

@@ -5,6 +5,7 @@ go 1.25.6
 require (
 	github.com/charmbracelet/lipgloss/v2 v2.0.0-beta1
 	github.com/creativeprojects/go-selfupdate v1.5.2
+	github.com/go-resty/resty/v2 v2.17.2
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -44,6 +45,7 @@ require (
 	gitlab.com/gitlab-org/api/client-go v1.9.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

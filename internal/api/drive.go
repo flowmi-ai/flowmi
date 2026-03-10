@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
 
 type DriveObject struct {
@@ -250,29 +252,36 @@ func (c *Client) GetDownloadURLByPath(ctx context.Context, path string) (*Downlo
 // UploadToPresignedURL uploads binary data to a presigned R2 URL.
 // Returns the ETag from the response header.
 func (c *Client) UploadToPresignedURL(ctx context.Context, uploadURL, contentType string, body io.Reader, size int64) (string, error) {
-	httpClient := &http.Client{Timeout: 10 * time.Minute}
+	client := resty.New().SetTimeout(10 * time.Minute)
+	// Set ContentLength on the raw http.Request so the upload streams
+	// without resty buffering the entire body to compute length.
+	// Also strip auto-detected Content-Type when the caller omits it,
+	// since presigned URLs are sensitive to exact headers.
+	client.SetPreRequestHook(func(_ *resty.Client, req *http.Request) error {
+		req.ContentLength = size
+		if contentType == "" {
+			req.Header.Del("Content-Type")
+		}
+		return nil
+	})
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, body)
-	if err != nil {
-		return "", fmt.Errorf("creating upload request: %w", err)
-	}
+	req := client.R().
+		SetContext(ctx).
+		SetBody(body)
 	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
+		req.SetHeader("Content-Type", contentType)
 	}
-	req.ContentLength = size
 
-	resp, err := httpClient.Do(req)
+	resp, err := req.Put(uploadURL)
 	if err != nil {
 		return "", fmt.Errorf("uploading to presigned URL: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
-		return "", fmt.Errorf("upload failed (status %d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+		return "", fmt.Errorf("upload failed (status %d): %s", resp.StatusCode(), strings.TrimSpace(string(resp.Body())))
 	}
 
-	etag := resp.Header.Get("ETag")
+	etag := resp.Header().Get("ETag")
 	// Strip surrounding quotes from ETag if present
 	if len(etag) >= 2 && etag[0] == '"' && etag[len(etag)-1] == '"' {
 		etag, _ = strconv.Unquote(etag)
@@ -283,22 +292,20 @@ func (c *Client) UploadToPresignedURL(ctx context.Context, uploadURL, contentTyp
 // DownloadFromURL downloads binary data from a presigned R2 URL.
 // Caller must close the returned ReadCloser.
 func (c *Client) DownloadFromURL(ctx context.Context, downloadURL string) (io.ReadCloser, error) {
-	httpClient := &http.Client{Timeout: 10 * time.Minute}
+	client := resty.New().SetTimeout(10 * time.Minute)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating download request: %w", err)
-	}
-
-	resp, err := httpClient.Do(req)
+	resp, err := client.R().
+		SetContext(ctx).
+		SetDoNotParseResponse(true).
+		Get(downloadURL)
 	if err != nil {
 		return nil, fmt.Errorf("downloading from presigned URL: %w", err)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		resp.Body.Close()
-		return nil, fmt.Errorf("download failed (status %d)", resp.StatusCode)
+	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+		resp.RawBody().Close()
+		return nil, fmt.Errorf("download failed (status %d)", resp.StatusCode())
 	}
 
-	return resp.Body, nil
+	return resp.RawBody(), nil
 }
