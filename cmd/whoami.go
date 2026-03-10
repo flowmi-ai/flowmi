@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
-	"github.com/flowmi/flowmi/internal/api"
-	"github.com/flowmi/flowmi/internal/config"
+	"github.com/flowmi-ai/flowmi/internal/api"
+	"github.com/flowmi-ai/flowmi/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

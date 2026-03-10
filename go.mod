@@ -1,4 +1,4 @@
-module github.com/flowmi/flowmi
+module github.com/flowmi-ai/flowmi
 
 go 1.25.6
 

@@ -8,7 +8,7 @@ COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Go build flags
-MODULE  := github.com/flowmi/flowmi/cmd
+MODULE  := github.com/flowmi-ai/flowmi/cmd
 LDFLAGS := -s -w \
 	-X $(MODULE).version=$(VERSION) \
 	-X $(MODULE).commit=$(COMMIT) \

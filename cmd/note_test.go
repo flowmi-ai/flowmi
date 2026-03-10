@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flowmi/flowmi/internal/api"
+	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )

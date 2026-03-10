@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"text/tabwriter"
 
-	"github.com/flowmi/flowmi/internal/api"
+	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

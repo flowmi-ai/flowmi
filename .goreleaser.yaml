@@ -11,9 +11,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/flowmi/flowmi/cmd.version={{.Version}}
-      - -X github.com/flowmi/flowmi/cmd.commit={{.ShortCommit}}
-      - -X github.com/flowmi/flowmi/cmd.date={{.Date}}
+      - -X github.com/flowmi-ai/flowmi/cmd.version={{.Version}}
+      - -X github.com/flowmi-ai/flowmi/cmd.commit={{.ShortCommit}}
+      - -X github.com/flowmi-ai/flowmi/cmd.date={{.Date}}
     binary: flowmi
 
 archives:

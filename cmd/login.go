@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/flowmi/flowmi/internal/auth"
-	"github.com/flowmi/flowmi/internal/config"
+	"github.com/flowmi-ai/flowmi/internal/auth"
+	"github.com/flowmi-ai/flowmi/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/term"

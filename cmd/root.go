@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flowmi/flowmi/internal/api"
-	"github.com/flowmi/flowmi/internal/config"
-	"github.com/flowmi/flowmi/internal/ui"
+	"github.com/flowmi-ai/flowmi/internal/api"
+	"github.com/flowmi-ai/flowmi/internal/config"
+	"github.com/flowmi-ai/flowmi/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"

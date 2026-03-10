@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	selfupdate "github.com/creativeprojects/go-selfupdate"
-	"github.com/flowmi/flowmi/internal/ui"
+	"github.com/flowmi-ai/flowmi/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

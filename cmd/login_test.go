@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flowmi/flowmi/internal/auth"
+	"github.com/flowmi-ai/flowmi/internal/auth"
 	"github.com/spf13/viper"
 )
 
