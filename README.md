@@ -11,7 +11,7 @@
 curl -fsSL https://flowmi.ai/install | bash
 ```
 
-### Homebrew # macOS and Linux (recommended, always up to date)
+### Homebrew <!-- macOS and Linux (recommended, always up to date) -->
 
 ```bash
 brew install flowmi-ai/tap/flowmi
