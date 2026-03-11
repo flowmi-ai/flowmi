@@ -1,0 +1,6 @@
+{
+  "name": "flowmi",
+  "version": "0.1.0",
+  "description": "Skills powered by the Flowmi CLI — search, scrape, and research the web from Claude Code",
+  "homepage": "https://github.com/flowmi-ai/flowmi"
+}
