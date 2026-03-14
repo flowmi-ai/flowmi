@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/flowmi-ai/flowmi/internal/auth"
 	"github.com/flowmi-ai/flowmi/internal/config"
 	"github.com/spf13/cobra"
@@ -20,11 +23,15 @@ var loginCmd = &cobra.Command{
 
 By default, opens a browser window for OAuth2 login (supports social login).
 Use --email and --password flags for direct email/password login (e.g. CI/CD).
+Use --with-token to provide a setup token (fst_) or API key (flk_) directly or via stdin.
 
 Use --no-browser to print the login URL instead of opening the browser automatically.`,
 	Example: `  flowmi auth login
   flowmi auth login --no-browser
-  flowmi auth login --email test@example.com --password "$FLOWMI_PASSWORD"`,
+  flowmi auth login --email test@example.com --password "$FLOWMI_PASSWORD"
+  flowmi auth login --with-token fst_...
+  flowmi auth login --with-token flk_...
+  echo "fst_..." | flowmi auth login --with-token`,
 	RunE: runLogin,
 }
 
@@ -32,10 +39,14 @@ func init() {
 	loginCmd.Flags().String("email", "", "email address for direct login (skips browser)")
 	loginCmd.Flags().String("password", "", "password for direct login (used with --email)")
 	loginCmd.Flags().Bool("no-browser", false, "print the login URL instead of opening the browser")
+	loginCmd.Flags().String("with-token", "", "setup token (fst_) or API key (flk_); reads from stdin if no value given")
 	authCmd.AddCommand(loginCmd)
 }
 
 func runLogin(cmd *cobra.Command, args []string) error {
+	if cmd.Flags().Changed("with-token") {
+		return tokenLogin(cmd)
+	}
 	email, _ := cmd.Flags().GetString("email")
 	if email != "" {
 		return passwordLogin(cmd, email)
@@ -185,6 +196,75 @@ func passwordLogin(cmd *cobra.Command, email string) error {
 	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), "Login successful!")
+	return nil
+}
+
+// tokenLogin authenticates with a setup token (fst_) or API key (flk_).
+// Reads from the --with-token flag value, or falls back to stdin.
+func tokenLogin(cmd *cobra.Command) error {
+	apiServerURL := viper.GetString("api_server_url")
+
+	// Try flag value first, fall back to stdin.
+	token, _ := cmd.Flags().GetString("with-token")
+	token = strings.TrimSpace(token)
+	if token == "" {
+		scanner := bufio.NewScanner(os.Stdin)
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("reading token from stdin: %w", err)
+			}
+			return fmt.Errorf("no token provided")
+		}
+		token = strings.TrimSpace(scanner.Text())
+		if token == "" {
+			return fmt.Errorf("no token provided")
+		}
+	}
+
+	switch {
+	case strings.HasPrefix(token, "fst_"):
+		// Setup token → exchange for API key.
+		exchangeURL := apiServerURL + "/api/v1/setup-tokens/exchange"
+		apiKey, err := auth.ExchangeSetupToken(cmd.Context(), exchangeURL, token)
+		if err != nil {
+			return err
+		}
+		if err := saveAPIKey(apiKey); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Login successful! API key saved.")
+
+	case strings.HasPrefix(token, "flk_"):
+		// API key → verify and save.
+		client := api.NewClient(apiServerURL, token)
+		if viper.GetBool("debug") {
+			client.HTTPClient.SetDebug(true)
+		}
+		if _, err := client.GetMe(cmd.Context()); err != nil {
+			return fmt.Errorf("API key verification failed: %w", err)
+		}
+		if err := saveAPIKey(token); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Login successful! API key saved.")
+
+	default:
+		return fmt.Errorf("unrecognized token format: expected fst_ (setup token) or flk_ (API key)")
+	}
+
+	return nil
+}
+
+func saveAPIKey(apiKey string) error {
+	creds, err := config.LoadCredentials()
+	if err != nil {
+		return fmt.Errorf("loading credentials: %w", err)
+	}
+	creds["api_key"] = apiKey
+	if err := config.SaveCredentials(creds); err != nil {
+		return fmt.Errorf("saving API key: %w", err)
+	}
+	viper.Set("api_key", apiKey)
 	return nil
 }
 

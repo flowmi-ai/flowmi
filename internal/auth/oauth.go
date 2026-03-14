@@ -149,6 +149,38 @@ func RefreshTokens(ctx context.Context, refreshURL, refreshToken string) (*Token
 	return &token, nil
 }
 
+// ExchangeSetupToken exchanges a setup token (fst_...) for an API key (flk_...).
+// The endpoint requires no authentication — the setup token itself is the credential.
+func ExchangeSetupToken(ctx context.Context, exchangeURL, setupToken string) (string, error) {
+	resp, err := restyClient.R().
+		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetBody(map[string]string{
+			"token": setupToken,
+		}).
+		Post(exchangeURL)
+	if err != nil {
+		return "", fmt.Errorf("exchanging setup token: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusCreated {
+		return "", parseErrorResponse(resp.StatusCode(), resp.Body())
+	}
+
+	var envelope struct {
+		Data struct {
+			APIKey string `json:"apiKey"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body(), &envelope); err != nil {
+		return "", fmt.Errorf("decoding setup token response: %w", err)
+	}
+	if envelope.Data.APIKey == "" {
+		return "", fmt.Errorf("server returned empty API key")
+	}
+	return envelope.Data.APIKey, nil
+}
+
 // parseErrorResponse extracts an error message from a non-200 response.
 // It tries the server envelope format {"error":{"message":"..."}} first,
 // then falls back to OAuth2 standard {"error":"...", "error_description":"..."}.

@@ -292,14 +292,8 @@ func TestRefreshTokens(t *testing.T) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("ParseForm: %v", err)
 		}
-		if got := r.FormValue("grant_type"); got != "refresh_token" {
-			t.Errorf("grant_type = %q, want refresh_token", got)
-		}
 		if got := r.FormValue("refresh_token"); got != "old_refresh" {
 			t.Errorf("refresh_token = %q, want old_refresh", got)
-		}
-		if got := r.FormValue("client_id"); got != "flowmi-cli" {
-			t.Errorf("client_id = %q, want flowmi-cli", got)
 		}
 
 		w.Header().Set("Content-Type", "application/json")

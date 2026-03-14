@@ -38,7 +38,7 @@ internal/
 ### Command Tree
 
 ```
-fm auth login|status     fm note list|create|view|edit|delete|trash|restore
+fm auth login|status|token  fm note list|create|view|edit|delete|trash|restore
 fm drive list|upload|download|view|delete|trash|restore
 fm table list|create|view|edit|delete|trash|restore
 fm table field add|edit|delete                fm table row list|create|view|edit|delete|query|trash|restore

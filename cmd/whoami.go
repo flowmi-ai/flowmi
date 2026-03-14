@@ -54,17 +54,32 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 	}
 }
 
+// authMethodLabel returns a human-readable label for the current auth method.
+func authMethodLabel() string {
+	_, method := resolveToken()
+	switch method {
+	case "api_key":
+		return "API key"
+	case "token":
+		return "OAuth2 token"
+	default:
+		return "unknown"
+	}
+}
+
 func printJSON(cmd *cobra.Command, profile *api.UserProfile, credits int64) error {
 	combined := struct {
 		ID        string    `json:"id"`
 		Email     string    `json:"email"`
 		CreatedAt time.Time `json:"createdAt"`
 		Credits   int64     `json:"credits"`
+		Auth      string    `json:"auth"`
 	}{
 		ID:        profile.ID,
 		Email:     profile.Email,
 		CreatedAt: profile.CreatedAt,
 		Credits:   credits,
+		Auth:      authMethodLabel(),
 	}
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
@@ -83,6 +98,7 @@ func printText(cmd *cobra.Command, profile *api.UserProfile, credits int64) erro
 	fmt.Fprintf(w, "  %s     %s\n", label.Render("ID:"), value.Render(profile.ID))
 	fmt.Fprintf(w, "  %s  %s\n", label.Render("Since:"), value.Render(profile.CreatedAt.Format("2006-01-02")))
 	fmt.Fprintf(w, "  %s %s\n", label.Render("Credits:"), value.Render(formatInt(credits)))
+	fmt.Fprintf(w, "  %s    %s\n", label.Render("Auth:"), value.Render(authMethodLabel()))
 
 	credsPath, err := config.CredentialsFilePath()
 	if err == nil {
@@ -101,6 +117,7 @@ func printTable(cmd *cobra.Command, profile *api.UserProfile, credits int64) err
 	fmt.Fprintf(w, "ID\t%s\n", profile.ID)
 	fmt.Fprintf(w, "Since\t%s\n", profile.CreatedAt.Format("2006-01-02"))
 	fmt.Fprintf(w, "Credits\t%s\n", formatInt(credits))
+	fmt.Fprintf(w, "Auth\t%s\n", authMethodLabel())
 
 	credsPath, err := config.CredentialsFilePath()
 	if err == nil {
