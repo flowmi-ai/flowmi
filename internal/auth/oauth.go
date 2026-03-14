@@ -12,12 +12,16 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
-	"time"
 
-	"github.com/go-resty/resty/v2"
+	"github.com/flowmi-ai/flowmi/internal/httpclient"
 )
 
-var restyClient = resty.New().SetTimeout(30 * time.Second).SetResponseBodyLimit(1 << 20)
+var restyClient = httpclient.New()
+
+// SetDebug enables debug logging on the auth HTTP client.
+func SetDebug(enabled bool) {
+	restyClient.SetDebug(enabled)
+}
 
 // PlaceholderRedirectURI is a fixed redirect URI used in the login flow.
 // No real callback server is needed since the CLI calls the login API directly.
@@ -127,9 +131,7 @@ func RefreshTokens(ctx context.Context, refreshURL, refreshToken string) (*Token
 	resp, err := restyClient.R().
 		SetContext(ctx).
 		SetFormData(map[string]string{
-			"grant_type":    "refresh_token",
 			"refresh_token": refreshToken,
-			"client_id":     "flowmi-cli",
 		}).
 		Post(refreshURL)
 	if err != nil {

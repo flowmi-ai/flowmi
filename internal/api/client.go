@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flowmi-ai/flowmi/internal/httpclient"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -48,7 +49,7 @@ func NewClient(baseURL, accessToken string) *Client {
 	return &Client{
 		BaseURL:     baseURL,
 		AccessToken: accessToken,
-		HTTPClient:  resty.New().SetTimeout(30 * time.Second).SetResponseBodyLimit(1 << 20),
+		HTTPClient:  httpclient.New(),
 	}
 }
 

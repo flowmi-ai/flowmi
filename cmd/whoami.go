@@ -26,14 +26,10 @@ func init() {
 }
 
 func runAuthStatus(cmd *cobra.Command, args []string) error {
-	accessToken := viper.GetString("access_token")
-	if accessToken == "" {
-		return api.NewError(api.CodeAuthRequired, "not logged in").
-			WithHint("Run 'flowmi auth login' to authenticate.")
+	client, err := newAPIClient()
+	if err != nil {
+		return err
 	}
-
-	apiServerURL := viper.GetString("api_server_url")
-	client := api.NewClient(apiServerURL, accessToken)
 
 	profile, err := client.GetMe(cmd.Context())
 	if err != nil {

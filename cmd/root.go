@@ -20,6 +20,7 @@ var cfgFile string
 var defaultHelpFunc func(*cobra.Command, []string)
 var globalHelpFlagNames = map[string]struct{}{
 	"config": {},
+	"debug":  {},
 	"format": {},
 	"output": {},
 }
@@ -56,7 +57,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ~/.config/flowmi/config.toml)")
 	rootCmd.PersistentFlags().String("format", "text", "help/options format: text, json")
 	rootCmd.PersistentFlags().StringP("output", "o", "text", "output format: text, json, table")
+	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging (HTTP requests/responses)")
 	viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
+	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 
 	cobra.AddTemplateFunc("hasParentInheritedFlags", hasParentInheritedFlags)
 	cobra.AddTemplateFunc("parentInheritedFlagUsages", parentInheritedFlagUsages)
