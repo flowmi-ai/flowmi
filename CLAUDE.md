@@ -20,7 +20,7 @@ go test ./internal/auth/ -v -run TestGeneratePKCE  # Single test
 
 Version info is injected via ldflags (`version`, `commit`, `date` in `cmd/version.go`).
 
-**After every code change**, run `make build && cp bin/flowmi /opt/homebrew/bin/flowmi` to install the updated binary locally.
+**After every code change**, run `make build && chmod u+w /opt/homebrew/Cellar/flowmi/0.2.0/bin/flowmi && cp bin/flowmi /opt/homebrew/Cellar/flowmi/0.2.0/bin/flowmi` to install the updated binary locally.
 
 ## Architecture
 
@@ -43,7 +43,8 @@ fm drive list|upload|download|view|delete|trash|restore
 fm table list|create|view|edit|delete|trash|restore
 fm table field add|edit|delete                fm table row list|create|view|edit|delete|query|trash|restore
 fm email send|list|view|delete|trash|restore  fm email mailbox list|create|edit|delete
-fm search [web|images|news]                   fm scrape <url>
+fm image generate                              fm search [web|images|news]
+fm scrape <url>
 fm config set|get|list                        fm update | fm version | fm options
 fm completion bash|zsh|fish|powershell
 ```
