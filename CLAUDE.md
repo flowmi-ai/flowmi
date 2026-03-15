@@ -20,7 +20,7 @@ go test ./internal/auth/ -v -run TestGeneratePKCE  # Single test
 
 Version info is injected via ldflags (`version`, `commit`, `date` in `cmd/version.go`).
 
-**After every code change**, run `make build && chmod u+w /opt/homebrew/Cellar/flowmi/0.2.0/bin/flowmi && cp bin/flowmi /opt/homebrew/Cellar/flowmi/0.2.0/bin/flowmi` to install the updated binary locally.
+**After every code change**, run `make build && chmod u+w /opt/homebrew/Cellar/flowmi/0.2.1/bin/flowmi && cp bin/flowmi /opt/homebrew/Cellar/flowmi/0.2.1/bin/flowmi` to install the updated binary locally.
 
 ## Architecture
 
