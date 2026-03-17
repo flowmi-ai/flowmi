@@ -43,7 +43,7 @@ func init() {
 	videoGenerateCmd.Flags().String("video-url", "", "source video URL for video editing (duration capped at 8.7s)")
 	videoGenerateCmd.Flags().IntP("duration", "d", 0, "video length in seconds: 1–15 (required)")
 	videoGenerateCmd.Flags().StringP("model", "m", "", "model: {grok-imagine-video} (default \"grok-imagine-video\")")
-	videoGenerateCmd.Flags().StringP("aspect-ratio", "a", "", "output aspect ratio: {1:1|16:9|9:16|4:3|3:4|3:2|2:3} (default \"16:9\")")
+	videoGenerateCmd.Flags().StringP("aspect-ratio", "a", "", "output aspect ratio: {auto|1:1|16:9|9:16|4:3|3:4|3:2|2:3} (default \"auto\")")
 	videoGenerateCmd.Flags().StringP("resolution", "r", "", "output resolution: {480p|720p} (default \"480p\")")
 	videoGenerateCmd.Flags().StringP("output-file", "f", "", "output file path (default: generated_<timestamp>.mp4)")
 	videoGenerateCmd.MarkFlagRequired("prompt")
@@ -54,7 +54,7 @@ func init() {
 }
 
 var validVideoModels = []string{"grok-imagine-video"}
-var validVideoAspectRatios = []string{"1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"}
+var validVideoAspectRatios = []string{"auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"}
 var validVideoResolutions = []string{"480p", "720p"}
 
 func runVideoGenerate(cmd *cobra.Command, args []string) error {
@@ -96,7 +96,7 @@ func runVideoGenerate(cmd *cobra.Command, args []string) error {
 		Prompt:      prompt,
 		Model:       model,
 		Duration:    duration,
-		AspectRatio: aspectRatio,
+		AspectRatio: stripAuto(aspectRatio),
 		Resolution:  resolution,
 	}
 
@@ -115,13 +115,15 @@ func runVideoGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 1: Submit generation request.
-	fmt.Fprintln(cmd.OutOrStdout(), "Submitting video generation request...")
+	output := viper.GetString("output")
+	if output != "json" {
+		fmt.Fprintln(cmd.OutOrStdout(), "Submitting video generation request...")
+	}
 	genResp, err := client.GenerateVideo(cmd.Context(), req)
 	if err != nil {
 		return err
 	}
 
-	output := viper.GetString("output")
 	if output == "json" {
 		return pollAndOutputJSON(cmd, client, genResp.RequestID)
 	}
@@ -193,9 +195,28 @@ func pollAndOutputJSON(cmd *cobra.Command, client *api.Client, requestID string)
 			continue
 		}
 
+		// Download file if --output-file is set and video is ready.
+		var savedTo string
+		outFile, _ := cmd.Flags().GetString("output-file")
+		if outFile != "" && status.Status == "done" && status.Video != nil {
+			if err := downloadFile(status.Video.URL, outFile); err != nil {
+				return fmt.Errorf("downloading video: %w", err)
+			}
+			savedTo = outFile
+		}
+
+		result := struct {
+			RequestID string `json:"requestId"`
+			SavedTo   string `json:"savedTo,omitempty"`
+			*api.VideoStatusResponse
+		}{
+			RequestID:           requestID,
+			SavedTo:             savedTo,
+			VideoStatusResponse: status,
+		}
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
-		return enc.Encode(status)
+		return enc.Encode(result)
 	}
 }
 
