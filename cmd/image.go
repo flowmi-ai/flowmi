@@ -38,9 +38,9 @@ The generated image is saved to a file by default.`,
 func init() {
 	imageGenerateCmd.Flags().StringP("prompt", "p", "", "text description of the desired image (required)")
 	imageGenerateCmd.Flags().StringSliceP("image", "i", nil, "reference image path (repeatable, max 14)")
-	imageGenerateCmd.Flags().StringP("model", "m", "", "model: {gemini-3.1-flash-image-preview|gemini-3-pro-image-preview} (default \"gemini-3.1-flash-image-preview\")")
-	imageGenerateCmd.Flags().StringP("aspect-ratio", "a", "", "output aspect ratio: {auto|1:1|2:3|3:2|3:4|4:3|4:5|5:4|9:16|16:9|21:9|1:4|4:1|1:8|8:1} (default \"auto\")")
-	imageGenerateCmd.Flags().StringP("size", "s", "", "output resolution: {512|1K|2K|4K} (default \"1K\")")
+	imageGenerateCmd.Flags().StringP("model", "m", "", "model: {gemini-3.1-flash-image-preview|gemini-3-pro-image-preview|grok-imagine-image|grok-imagine-image-pro} (default \"gemini-3.1-flash-image-preview\")")
+	imageGenerateCmd.Flags().StringP("aspect-ratio", "a", "", "output aspect ratio: {auto|1:1|2:3|3:2|3:4|4:3|4:5|5:4|9:16|16:9|21:9|1:4|4:1|1:8|8:1|2:1|1:2|19.5:9|9:19.5|20:9|9:20} (default \"auto\")")
+	imageGenerateCmd.Flags().StringP("size", "s", "", "output resolution: {512|1K|1k|2K|2k|4K} (default \"1K\")")
 	imageGenerateCmd.Flags().StringP("output-file", "f", "", "output file path (default: generated_<timestamp>.<ext>)")
 	imageGenerateCmd.MarkFlagRequired("prompt")
 
@@ -157,9 +157,9 @@ func saveAndPrintImage(cmd *cobra.Command, result *api.ImageGenerateResponse) er
 	return nil
 }
 
-var validModels = []string{"gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"}
-var validAspectRatios = []string{"auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1"}
-var validSizes = []string{"512", "1K", "2K", "4K"}
+var validModels = []string{"gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview", "grok-imagine-image", "grok-imagine-image-pro"}
+var validAspectRatios = []string{"auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1", "2:1", "1:2", "19.5:9", "9:19.5", "20:9", "9:20"}
+var validSizes = []string{"512", "1K", "1k", "2K", "2k", "4K"}
 
 // stripAuto returns "" for "auto", passthrough otherwise.
 func stripAuto(v string) string {
