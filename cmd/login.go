@@ -13,7 +13,6 @@ import (
 	"github.com/flowmi-ai/flowmi/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"golang.org/x/term"
 )
 
 var loginCmd = &cobra.Command{
@@ -22,13 +21,11 @@ var loginCmd = &cobra.Command{
 	Long: `Authenticate with your flowmi account.
 
 By default, opens a browser window for OAuth2 login (supports social login).
-Use --email and --password flags for direct email/password login (e.g. CI/CD).
 Use --with-token to provide a setup token (fst_) or API key (flk_) directly or via stdin.
 
 Use --no-browser to print the login URL instead of opening the browser automatically.`,
 	Example: `  flowmi auth login
   flowmi auth login --no-browser
-  flowmi auth login --email test@example.com --password "$FLOWMI_PASSWORD"
   flowmi auth login --with-token fst_...
   flowmi auth login --with-token flk_...
   echo "fst_..." | flowmi auth login --with-token`,
@@ -36,8 +33,6 @@ Use --no-browser to print the login URL instead of opening the browser automatic
 }
 
 func init() {
-	loginCmd.Flags().String("email", "", "email address for direct login (skips browser)")
-	loginCmd.Flags().String("password", "", "password for direct login (used with --email)")
 	loginCmd.Flags().Bool("no-browser", false, "print the login URL instead of opening the browser")
 	loginCmd.Flags().String("with-token", "", "setup token (fst_) or API key (flk_); reads from stdin if no value given")
 	authCmd.AddCommand(loginCmd)
@@ -46,10 +41,6 @@ func init() {
 func runLogin(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("with-token") {
 		return tokenLogin(cmd)
-	}
-	email, _ := cmd.Flags().GetString("email")
-	if email != "" {
-		return passwordLogin(cmd, email)
 	}
 	return browserLogin(cmd)
 }
@@ -129,74 +120,6 @@ func browserLogin(cmd *cobra.Command) error {
 	case <-ctx.Done():
 		return fmt.Errorf("login timed out — please try again")
 	}
-}
-
-// passwordLogin authenticates directly via email/password (CI/CD flow).
-func passwordLogin(cmd *cobra.Command, email string) error {
-	apiServerURL := viper.GetString("api_server_url")
-
-	// Get password.
-	password, _ := cmd.Flags().GetString("password")
-	if password == "" {
-		fmt.Fprint(cmd.OutOrStdout(), "Password: ")
-		raw, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Fprintln(cmd.OutOrStdout()) // newline after hidden input
-		if err != nil {
-			return fmt.Errorf("reading password: %w", err)
-		}
-		password = string(raw)
-		if password == "" {
-			return fmt.Errorf("password is required")
-		}
-	}
-
-	// Generate PKCE pair.
-	verifier, challenge, err := auth.GeneratePKCE()
-	if err != nil {
-		return fmt.Errorf("generating PKCE: %w", err)
-	}
-
-	// Generate state.
-	state, err := auth.GenerateState()
-	if err != nil {
-		return fmt.Errorf("generating state: %w", err)
-	}
-
-	// Login: send credentials to get auth code.
-	loginURL := apiServerURL + "/api/v1/oauth2/login"
-	loginResp, err := auth.Login(cmd.Context(), loginURL, &auth.LoginRequest{
-		Email:               email,
-		Password:            password,
-		ClientID:            "flowmi-cli",
-		RedirectURI:         auth.PlaceholderRedirectURI,
-		ResponseType:        "code",
-		CodeChallenge:       challenge,
-		CodeChallengeMethod: "S256",
-		State:               state,
-	})
-	if err != nil {
-		return fmt.Errorf("login failed: %w", err)
-	}
-
-	// Validate state.
-	if loginResp.State != state {
-		return fmt.Errorf("state mismatch: possible CSRF attack")
-	}
-
-	// Exchange code for tokens.
-	tokenURL := apiServerURL + "/api/v1/oauth2/token"
-	token, err := auth.ExchangeCode(cmd.Context(), tokenURL, loginResp.Code, verifier, auth.PlaceholderRedirectURI)
-	if err != nil {
-		return fmt.Errorf("exchanging code for tokens: %w", err)
-	}
-
-	// Save tokens.
-	if err := saveTokens(token); err != nil {
-		return fmt.Errorf("saving tokens: %w", err)
-	}
-
-	fmt.Fprintln(cmd.OutOrStdout(), "Login successful!")
-	return nil
 }
 
 // tokenLogin authenticates with a setup token (fst_) or API key (flk_).
