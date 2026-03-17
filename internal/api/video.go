@@ -9,13 +9,17 @@ import (
 )
 
 type VideoGenerateRequest struct {
-	Model       string          `json:"model,omitempty"`
-	Prompt      string          `json:"prompt"`
-	Duration    int             `json:"duration,omitempty"`
-	AspectRatio string          `json:"aspectRatio,omitempty"`
-	Resolution  string          `json:"resolution,omitempty"`
-	Image       *ReferenceImage `json:"image,omitempty"`
-	VideoURL    string          `json:"videoUrl,omitempty"`
+	Model       string      `json:"model,omitempty"`
+	Prompt      string      `json:"prompt"`
+	Duration    int         `json:"duration"`
+	AspectRatio string      `json:"aspectRatio,omitempty"`
+	Resolution  string      `json:"resolution,omitempty"`
+	Image       *VideoRef   `json:"image,omitempty"`
+	Video       *VideoRef   `json:"video,omitempty"`
+}
+
+type VideoRef struct {
+	URL string `json:"url"`
 }
 
 type VideoGenerateResponse struct {

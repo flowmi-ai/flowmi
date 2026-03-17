@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
@@ -37,13 +40,14 @@ the video is ready, then downloads it.`,
 func init() {
 	videoGenerateCmd.Flags().StringP("prompt", "p", "", "text description of the desired video (required)")
 	videoGenerateCmd.Flags().StringP("image", "i", "", "source image path for image-to-video")
-	videoGenerateCmd.Flags().String("video-url", "", "source video URL for video editing")
-	videoGenerateCmd.Flags().IntP("duration", "d", 0, "video length in seconds: 1–15 (default: model decides)")
+	videoGenerateCmd.Flags().String("video-url", "", "source video URL for video editing (duration capped at 8.7s)")
+	videoGenerateCmd.Flags().IntP("duration", "d", 0, "video length in seconds: 1–15 (required)")
 	videoGenerateCmd.Flags().StringP("model", "m", "", "model: {grok-imagine-video} (default \"grok-imagine-video\")")
 	videoGenerateCmd.Flags().StringP("aspect-ratio", "a", "", "output aspect ratio: {1:1|16:9|9:16|4:3|3:4|3:2|2:3} (default \"16:9\")")
 	videoGenerateCmd.Flags().StringP("resolution", "r", "", "output resolution: {480p|720p} (default \"480p\")")
 	videoGenerateCmd.Flags().StringP("output-file", "f", "", "output file path (default: generated_<timestamp>.mp4)")
 	videoGenerateCmd.MarkFlagRequired("prompt")
+	videoGenerateCmd.MarkFlagRequired("duration")
 
 	videoCmd.AddCommand(videoGenerateCmd)
 	rootCmd.AddCommand(videoCmd)
@@ -83,7 +87,7 @@ func runVideoGenerate(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	if duration != 0 && (duration < 1 || duration > 15) {
+	if duration < 1 || duration > 15 {
 		return fmt.Errorf("invalid value %d for --duration: must be 1–15", duration)
 	}
 
@@ -94,16 +98,20 @@ func runVideoGenerate(cmd *cobra.Command, args []string) error {
 		Duration:    duration,
 		AspectRatio: aspectRatio,
 		Resolution:  resolution,
-		VideoURL:    videoURL,
 	}
 
-	// Encode source image for image-to-video.
+	// Encode source image as data URI for image-to-video.
 	if imagePath != "" {
-		ref, err := encodeImageFile(imagePath)
+		dataURI, err := encodeImageDataURI(imagePath)
 		if err != nil {
 			return err
 		}
-		req.Image = ref
+		req.Image = &api.VideoRef{URL: dataURI}
+	}
+
+	// Source video for video editing.
+	if videoURL != "" {
+		req.Video = &api.VideoRef{URL: videoURL}
 	}
 
 	// Step 1: Submit generation request.
@@ -189,6 +197,19 @@ func pollAndOutputJSON(cmd *cobra.Command, client *api.Client, requestID string)
 		enc.SetIndent("", "  ")
 		return enc.Encode(status)
 	}
+}
+
+// encodeImageDataURI reads an image file and returns a base64 data URI.
+func encodeImageDataURI(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("reading image %s: %w", path, err)
+	}
+	mimeType := mime.TypeByExtension(filepath.Ext(path))
+	if mimeType == "" {
+		mimeType = "image/jpeg"
+	}
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)), nil
 }
 
 func downloadFile(url, dest string) error {
