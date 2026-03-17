@@ -43,7 +43,8 @@ fm drive list|upload|download|view|delete|trash|restore
 fm table list|create|view|edit|delete|trash|restore
 fm table field add|edit|delete                fm table row list|create|view|edit|delete|query|trash|restore
 fm email send|list|view|delete|trash|restore  fm email mailbox list|create|edit|delete
-fm image generate                              fm search [web|images|news]
+fm image generate                              fm video generate
+fm search [web|images|news]
 fm scrape <url>
 fm config set|get|list                        fm update | fm version | fm options
 fm completion bash|zsh|fish|powershell
