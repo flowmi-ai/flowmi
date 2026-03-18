@@ -32,6 +32,10 @@ func scrapeMockServer(t *testing.T, check func(r *http.Request)) *httptest.Serve
 
 func setupScrapeTest(t *testing.T, server *httptest.Server) {
 	t.Helper()
+	if f := rootCmd.PersistentFlags().Lookup("json"); f != nil {
+		f.Changed = false
+		_ = rootCmd.PersistentFlags().Set("json", "false")
+	}
 	viper.Set("api_server_url", server.URL)
 	viper.Set("access_token", "test-token")
 	t.Cleanup(func() {
@@ -77,14 +81,12 @@ func TestScrapeJSON(t *testing.T) {
 	server := scrapeMockServer(t, nil)
 	defer server.Close()
 	setupScrapeTest(t, server)
-	viper.Set("output", "json")
-	t.Cleanup(func() { viper.Set("output", "") })
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
-	rootCmd.SetArgs([]string{"scrape", "https://example.com"})
+	rootCmd.SetArgs([]string{"scrape", "https://example.com", "--json"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("scrape -o json failed: %v", err)
+		t.Fatalf("scrape --json failed: %v", err)
 	}
 
 	var result api.ScrapeResponse

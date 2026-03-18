@@ -90,16 +90,13 @@ func runTableFieldAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("adding column: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Column added to table %s\n", table.ID)
-		return printTableColumns(cmd, table)
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Column added to table %s\n", table.ID)
+	return printTableColumns(cmd, table)
 }
 
 func runTableFieldEdit(cmd *cobra.Command, args []string) error {
@@ -141,16 +138,13 @@ func runTableFieldEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating column: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Column updated on table %s\n", table.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Column updated on table %s\n", table.ID)
+	return nil
 }
 
 func runTableFieldDelete(cmd *cobra.Command, args []string) error {
@@ -163,14 +157,11 @@ func runTableFieldDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting column: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"tableId": args[0], "columnId": args[1], "status": "deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Column %s deleted from table %s\n", args[1], args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Column %s deleted from table %s\n", args[1], args[0])
+	return nil
 }

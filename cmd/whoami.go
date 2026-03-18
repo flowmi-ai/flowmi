@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"text/tabwriter"
 	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
@@ -41,17 +40,10 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fetching credit balance: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		return printJSON(cmd, profile, balance.Balance)
-	case "table":
-		return printTable(cmd, profile, balance.Balance)
-	case "text", "":
-		return printText(cmd, profile, balance.Balance)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printText(cmd, profile, balance.Balance)
 }
 
 // authMethodLabel returns a human-readable label for the current auth method.
@@ -107,24 +99,6 @@ func printText(cmd *cobra.Command, profile *api.UserProfile, credits int64) erro
 	}
 
 	return nil
-}
-
-func printTable(cmd *cobra.Command, profile *api.UserProfile, credits int64) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-
-	fmt.Fprintln(w, "FIELD\tVALUE")
-	fmt.Fprintf(w, "Email\t%s\n", profile.Email)
-	fmt.Fprintf(w, "ID\t%s\n", profile.ID)
-	fmt.Fprintf(w, "Since\t%s\n", profile.CreatedAt.Format("2006-01-02"))
-	fmt.Fprintf(w, "Credits\t%s\n", formatInt(credits))
-	fmt.Fprintf(w, "Auth\t%s\n", authMethodLabel())
-
-	credsPath, err := config.CredentialsFilePath()
-	if err == nil {
-		fmt.Fprintf(w, "Credentials\t%s\n", credsPath)
-	}
-
-	return w.Flush()
 }
 
 // formatInt formats an integer with comma separators (e.g., 1200 → "1,200").

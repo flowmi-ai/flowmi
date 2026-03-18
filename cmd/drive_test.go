@@ -15,6 +15,10 @@ import (
 
 func setupDriveTest(t *testing.T, server *httptest.Server) {
 	t.Helper()
+	if f := rootCmd.PersistentFlags().Lookup("json"); f != nil {
+		f.Changed = false
+		_ = rootCmd.PersistentFlags().Set("json", "false")
+	}
 	viper.Set("api_server_url", server.URL)
 	viper.Set("access_token", "test-token")
 	t.Cleanup(func() {
@@ -109,14 +113,12 @@ func TestDriveListJSON(t *testing.T) {
 	server := driveListMockServer(t, nil)
 	defer server.Close()
 	setupDriveTest(t, server)
-	viper.Set("output", "json")
-	t.Cleanup(func() { viper.Set("output", "") })
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
-	rootCmd.SetArgs([]string{"drive", "list"})
+	rootCmd.SetArgs([]string{"drive", "list", "--json"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("drive list -o json failed: %v", err)
+		t.Fatalf("drive list --json failed: %v", err)
 	}
 
 	var list api.DriveListResponse
@@ -475,94 +477,6 @@ func TestDriveListSummaryOnStderr(t *testing.T) {
 
 	if !strings.Contains(errBuf.String(), "Showing 2 of 2 files") {
 		t.Errorf("stderr missing summary line, got: %q", errBuf.String())
-	}
-}
-
-func TestDriveUploadUnsupportedFormat(t *testing.T) {
-	// upload should reject -o table
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/drive/upload":
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{
-				"success": true,
-				"data": map[string]any{
-					"id":        "upload-1",
-					"uploadUrl": "http://" + r.Host + "/presigned-put",
-					"expiresIn": 3600,
-				},
-			})
-		case r.Method == http.MethodPut && r.URL.Path == "/presigned-put":
-			w.Header().Set("ETag", `"etag-abc"`)
-			w.WriteHeader(http.StatusOK)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/complete"):
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{
-				"success": true,
-				"data": map[string]any{
-					"id":         "obj-new",
-					"path":       "/test.txt",
-					"sizeBytes":  11,
-					"mimeType":   "text/plain",
-					"visibility": "private",
-					"properties": map[string]any{},
-					"createdAt":  "2025-06-01T00:00:00Z",
-					"updatedAt":  "2025-06-01T00:00:00Z",
-				},
-			})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-	setupDriveTest(t, server)
-	viper.Set("output", "table")
-	t.Cleanup(func() { viper.Set("output", "") })
-
-	tmpFile := t.TempDir() + "/test.txt"
-	if err := os.WriteFile(tmpFile, []byte("hello world"), 0644); err != nil {
-		t.Fatalf("creating test file: %v", err)
-	}
-
-	rootCmd.SetArgs([]string{"drive", "upload", tmpFile})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Fatal("expected error for unsupported format, got nil")
-	}
-	if !strings.Contains(err.Error(), "unsupported output format") {
-		t.Errorf("error = %q, want 'unsupported output format'", err.Error())
-	}
-}
-
-func TestDriveDeleteUnsupportedFormat(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"success": true,
-			"data": map[string]any{
-				"id":         "obj-1",
-				"path":       "/docs/readme.txt",
-				"sizeBytes":  1024,
-				"mimeType":   "text/plain",
-				"visibility": "private",
-				"properties": map[string]any{},
-				"createdAt":  "2025-06-01T00:00:00Z",
-				"updatedAt":  "2025-06-01T00:00:00Z",
-			},
-		})
-	}))
-	defer server.Close()
-	setupDriveTest(t, server)
-	viper.Set("output", "table")
-	t.Cleanup(func() { viper.Set("output", "") })
-
-	rootCmd.SetArgs([]string{"drive", "delete", "/docs/readme.txt"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Fatal("expected error for unsupported format, got nil")
-	}
-	if !strings.Contains(err.Error(), "unsupported output format") {
-		t.Errorf("error = %q, want 'unsupported output format'", err.Error())
 	}
 }
 

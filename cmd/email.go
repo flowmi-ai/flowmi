@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -24,7 +23,7 @@ var emailListCmd = &cobra.Command{
 	Example: `  fm email list
   fm email list -L 10 -p 2
   fm email list --direction inbound
-  fm email list -o json`,
+  fm email list --json`,
 	RunE: runEmailList,
 }
 
@@ -148,19 +147,12 @@ func runEmailList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing emails: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printEmailListTable(cmd, list)
-	case "text", "":
-		return printEmailListText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printEmailListText(cmd, list)
 }
 
 func printEmailListText(cmd *cobra.Command, list *api.EmailListResponse) error {
@@ -180,20 +172,6 @@ func printEmailListText(cmd *cobra.Command, list *api.EmailListResponse) error {
 	return nil
 }
 
-func printEmailListTable(cmd *cobra.Command, list *api.EmailListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tSENT\tDIRECTION\tFROM\tTO\tSUBJECT\tSTATUS")
-	for _, e := range list.Items {
-		ts := e.CreatedAt
-		if e.SentAt != nil {
-			ts = *e.SentAt
-		}
-		to := strings.Join(e.To, ", ")
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", e.ID, ts.Format("2006-01-02 15:04"), e.Direction, e.From, truncate(to, 30), truncate(e.Subject, 30), e.Status)
-	}
-	return w.Flush()
-}
-
 func runEmailView(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -205,19 +183,12 @@ func runEmailView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting email: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(email)
-	case "table":
-		return printEmailViewTable(cmd, email)
-	case "text", "":
-		return printEmailViewText(cmd, email)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printEmailViewText(cmd, email)
 }
 
 func printEmailViewText(cmd *cobra.Command, email *api.EmailDetail) error {
@@ -239,28 +210,9 @@ func printEmailViewText(cmd *cobra.Command, email *api.EmailDetail) error {
 	if email.TextBody != "" {
 		fmt.Fprintf(w, "\n%s\n", email.TextBody)
 	} else if email.HTMLBody != "" {
-		fmt.Fprintln(w, "\n(HTML only — use -o json to see full content)")
+		fmt.Fprintln(w, "\n(HTML only — use --json to see full content)")
 	}
 	return nil
-}
-
-func printEmailViewTable(cmd *cobra.Command, email *api.EmailDetail) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "FIELD\tVALUE")
-	fmt.Fprintf(w, "ID\t%s\n", email.ID)
-	fmt.Fprintf(w, "Direction\t%s\n", email.Direction)
-	fmt.Fprintf(w, "From\t%s\n", email.From)
-	fmt.Fprintf(w, "To\t%s\n", strings.Join(email.To, ", "))
-	if len(email.CC) > 0 {
-		fmt.Fprintf(w, "CC\t%s\n", strings.Join(email.CC, ", "))
-	}
-	fmt.Fprintf(w, "Subject\t%s\n", email.Subject)
-	fmt.Fprintf(w, "Status\t%s\n", email.Status)
-	if email.SentAt != nil {
-		fmt.Fprintf(w, "Sent\t%s\n", email.SentAt.Format("2006-01-02 15:04:05"))
-	}
-	fmt.Fprintf(w, "Created\t%s\n", email.CreatedAt.Format("2006-01-02 15:04:05"))
-	return w.Flush()
 }
 
 func runEmailSend(cmd *cobra.Command, args []string) error {
@@ -298,16 +250,13 @@ func runEmailSend(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("sending email: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(email)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Email sent: %s\n", email.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Email sent: %s\n", email.ID)
+	return nil
 }
 
 func runEmailTrash(cmd *cobra.Command, args []string) error {
@@ -324,19 +273,12 @@ func runEmailTrash(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing trashed emails: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printEmailTrashTable(cmd, list)
-	case "text", "":
-		return printEmailTrashText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printEmailTrashText(cmd, list)
 }
 
 func printEmailTrashText(cmd *cobra.Command, list *api.EmailListResponse) error {
@@ -356,19 +298,6 @@ func printEmailTrashText(cmd *cobra.Command, list *api.EmailListResponse) error 
 	return nil
 }
 
-func printEmailTrashTable(cmd *cobra.Command, list *api.EmailListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tDELETED\tDIRECTION\tFROM\tSUBJECT")
-	for _, e := range list.Items {
-		deletedAt := ""
-		if e.DeletedAt != nil {
-			deletedAt = e.DeletedAt.Format("2006-01-02 15:04")
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.ID, deletedAt, e.Direction, e.From, truncate(e.Subject, 30))
-	}
-	return w.Flush()
-}
-
 func runEmailTrashView(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -380,19 +309,12 @@ func runEmailTrashView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting trashed email: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(email)
-	case "table":
-		return printEmailViewTable(cmd, email)
-	case "text", "":
-		return printEmailViewText(cmd, email)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printEmailViewText(cmd, email)
 }
 
 func runEmailRestore(cmd *cobra.Command, args []string) error {
@@ -406,16 +328,13 @@ func runEmailRestore(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("restoring email: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(email)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Email restored: %s\n", email.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Email restored: %s\n", email.ID)
+	return nil
 }
 
 func runEmailTrashDelete(cmd *cobra.Command, args []string) error {
@@ -428,16 +347,13 @@ func runEmailTrashDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("permanently deleting email: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Email permanently deleted: %s\n", args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Email permanently deleted: %s\n", args[0])
+	return nil
 }
 
 func runEmailDelete(cmd *cobra.Command, args []string) error {
@@ -450,14 +366,11 @@ func runEmailDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting email: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"id": args[0], "status": "deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Email deleted: %s\n", args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Email deleted: %s\n", args[0])
+	return nil
 }

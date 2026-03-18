@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"text/tabwriter"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -145,19 +144,12 @@ func runNoteList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing notes: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printNoteListTable(cmd, list)
-	case "text", "":
-		return printNoteListText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printNoteListText(cmd, list)
 }
 
 func printNoteListText(cmd *cobra.Command, list *api.NoteListResponse) error {
@@ -171,15 +163,6 @@ func printNoteListText(cmd *cobra.Command, list *api.NoteListResponse) error {
 		fmt.Fprintf(w, "  %s  %s  %s  %s\n", n.ID, n.CreatedAt.Format("2006-01-02 15:04"), truncate(n.Subject, 30), truncate(n.Content, 50))
 	}
 	return nil
-}
-
-func printNoteListTable(cmd *cobra.Command, list *api.NoteListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tCREATED\tSUBJECT\tCONTENT")
-	for _, n := range list.Items {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", n.ID, n.CreatedAt.Format("2006-01-02 15:04"), truncate(n.Subject, 30), truncate(n.Content, 40))
-	}
-	return w.Flush()
 }
 
 func runNoteCreate(cmd *cobra.Command, args []string) error {
@@ -197,16 +180,13 @@ func runNoteCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating note: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(note)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Note created: %s\n", note.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Note created: %s\n", note.ID)
+	return nil
 }
 
 func runNoteView(cmd *cobra.Command, args []string) error {
@@ -220,19 +200,12 @@ func runNoteView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting note: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(note)
-	case "table":
-		return printNoteTable(cmd, note)
-	case "text", "":
-		return printNoteText(cmd, note)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printNoteText(cmd, note)
 }
 
 func printNoteText(cmd *cobra.Command, note *api.Note) error {
@@ -244,18 +217,6 @@ func printNoteText(cmd *cobra.Command, note *api.Note) error {
 	fmt.Fprintf(w, "Updated:  %s\n", note.UpdatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(w, "\n%s\n", note.Content)
 	return nil
-}
-
-func printNoteTable(cmd *cobra.Command, note *api.Note) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "FIELD\tVALUE")
-	fmt.Fprintf(w, "ID\t%s\n", note.ID)
-	fmt.Fprintf(w, "Subject\t%s\n", note.Subject)
-	fmt.Fprintf(w, "Labels\t%s\n", formatLabels(note.Labels))
-	fmt.Fprintf(w, "Created\t%s\n", note.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(w, "Updated\t%s\n", note.UpdatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(w, "Content\t%s\n", note.Content)
-	return w.Flush()
 }
 
 func runNoteEdit(cmd *cobra.Command, args []string) error {
@@ -291,16 +252,13 @@ func runNoteEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating note: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(note)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Note updated: %s\n", note.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Note updated: %s\n", note.ID)
+	return nil
 }
 
 func runNoteDelete(cmd *cobra.Command, args []string) error {
@@ -314,16 +272,13 @@ func runNoteDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting note: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(note)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Note deleted: %s\n", note.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Note deleted: %s\n", note.ID)
+	return nil
 }
 
 func runNoteTrash(cmd *cobra.Command, args []string) error {
@@ -339,19 +294,12 @@ func runNoteTrash(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing trashed notes: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printTrashTable(cmd, list)
-	case "text", "":
-		return printTrashText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printTrashText(cmd, list)
 }
 
 func printTrashText(cmd *cobra.Command, list *api.NoteListResponse) error {
@@ -371,19 +319,6 @@ func printTrashText(cmd *cobra.Command, list *api.NoteListResponse) error {
 	return nil
 }
 
-func printTrashTable(cmd *cobra.Command, list *api.NoteListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tDELETED\tSUBJECT\tCONTENT")
-	for _, n := range list.Items {
-		deletedAt := ""
-		if n.DeletedAt != nil {
-			deletedAt = n.DeletedAt.Format("2006-01-02 15:04")
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", n.ID, deletedAt, truncate(n.Subject, 30), truncate(n.Content, 40))
-	}
-	return w.Flush()
-}
-
 func runNoteTrashView(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -395,19 +330,12 @@ func runNoteTrashView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting trashed note: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(note)
-	case "table":
-		return printNoteTable(cmd, note)
-	case "text", "":
-		return printNoteText(cmd, note)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printNoteText(cmd, note)
 }
 
 func runNoteTrashDelete(cmd *cobra.Command, args []string) error {
@@ -420,16 +348,13 @@ func runNoteTrashDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("permanently deleting note: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Note permanently deleted: %s\n", args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Note permanently deleted: %s\n", args[0])
+	return nil
 }
 
 func runNoteRestore(cmd *cobra.Command, args []string) error {
@@ -443,14 +368,11 @@ func runNoteRestore(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("restoring note: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(note)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Note restored: %s\n", note.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Note restored: %s\n", note.ID)
+	return nil
 }

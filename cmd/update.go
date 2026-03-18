@@ -38,13 +38,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	yes, _ := cmd.Flags().GetBool("yes")
 	targetVersion, _ := cmd.Flags().GetString("version")
 
-	output := viper.GetString("output")
-	switch output {
-	case "json", "text", "table", "":
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
-	}
-
 	// Refuse to update dev builds.
 	if version == "dev" {
 		return fmt.Errorf("cannot update a dev build; install from a release first")
@@ -83,7 +76,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
 	if !found {
-		if output == "json" {
+		if viper.GetBool("json") {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(updateResult{
 				CurrentVersion: version,
 			})
@@ -94,7 +87,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Already up to date?
 	if release.LessOrEqual(version) {
-		if output == "json" {
+		if viper.GetBool("json") {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(updateResult{
 				CurrentVersion: version,
 				LatestVersion:  release.Version(),
@@ -107,14 +100,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show version diff.
-	if output != "json" {
+	if !viper.GetBool("json") {
 		fmt.Fprintf(cmd.OutOrStdout(), "Current version: %s\n", ui.InfoStyle.Render("v"+version))
 		fmt.Fprintf(cmd.OutOrStdout(), "Latest version:  %s\n", ui.SuccessStyle.Render("v"+release.Version()))
 	}
 
 	// Dry-run: stop here.
 	if dryRun {
-		if output == "json" {
+		if viper.GetBool("json") {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(updateResult{
 				CurrentVersion: version,
 				LatestVersion:  release.Version(),
@@ -147,7 +140,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("update failed: %w", err)
 	}
 
-	if output == "json" {
+	if viper.GetBool("json") {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(updateResult{
 			CurrentVersion: version,
 			LatestVersion:  release.Version(),

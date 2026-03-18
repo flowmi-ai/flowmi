@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"text/tabwriter"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -21,7 +20,7 @@ var emailMailboxListCmd = &cobra.Command{
 	Short:   "List mailboxes",
 	Aliases: []string{"ls"},
 	Example: `  fm email mailbox list
-  fm email mailbox list -o json`,
+  fm email mailbox list --json`,
 	RunE: runEmailMailboxList,
 }
 
@@ -79,19 +78,12 @@ func runEmailMailboxList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing mailboxes: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(mailboxes)
-	case "table":
-		return printMailboxListTable(cmd, mailboxes)
-	case "text", "":
-		return printMailboxListText(cmd, mailboxes)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printMailboxListText(cmd, mailboxes)
 }
 
 func printMailboxListText(cmd *cobra.Command, mailboxes []*api.Mailbox) error {
@@ -109,15 +101,6 @@ func printMailboxListText(cmd *cobra.Command, mailboxes []*api.Mailbox) error {
 		fmt.Fprintf(w, "  %s  %s  %s  %s\n", m.ID, m.Address, m.DisplayName, active)
 	}
 	return nil
-}
-
-func printMailboxListTable(cmd *cobra.Command, mailboxes []*api.Mailbox) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tADDRESS\tDISPLAY NAME\tACTIVE\tCREATED")
-	for _, m := range mailboxes {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%v\t%s\n", m.ID, m.Address, m.DisplayName, m.IsActive, m.CreatedAt.Format("2006-01-02 15:04"))
-	}
-	return w.Flush()
 }
 
 func runEmailMailboxCreate(cmd *cobra.Command, args []string) error {
@@ -139,16 +122,13 @@ func runEmailMailboxCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating mailbox: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(mailbox)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Mailbox created: %s (%s)\n", mailbox.Address, mailbox.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Mailbox created: %s (%s)\n", mailbox.Address, mailbox.ID)
+	return nil
 }
 
 func runEmailMailboxEdit(cmd *cobra.Command, args []string) error {
@@ -180,16 +160,13 @@ func runEmailMailboxEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating mailbox: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(mailbox)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Mailbox updated: %s (%s)\n", mailbox.Address, mailbox.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Mailbox updated: %s (%s)\n", mailbox.Address, mailbox.ID)
+	return nil
 }
 
 func runEmailMailboxDelete(cmd *cobra.Command, args []string) error {
@@ -202,14 +179,11 @@ func runEmailMailboxDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting mailbox: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"id": args[0], "status": "deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Mailbox deleted: %s\n", args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Mailbox deleted: %s\n", args[0])
+	return nil
 }

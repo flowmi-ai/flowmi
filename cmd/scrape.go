@@ -37,17 +37,12 @@ func runScrape(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scraping: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
-	case "text", "":
-		return printScrapeText(cmd, result)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printScrapeText(cmd, result)
 }
 
 func printScrapeText(cmd *cobra.Command, result *api.ScrapeResponse) error {

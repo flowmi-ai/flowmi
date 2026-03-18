@@ -53,6 +53,10 @@ func noteListMockServer(t *testing.T, check func(r *http.Request)) *httptest.Ser
 
 func setupNoteTest(t *testing.T, server *httptest.Server) {
 	t.Helper()
+	if f := rootCmd.PersistentFlags().Lookup("json"); f != nil {
+		f.Changed = false
+		_ = rootCmd.PersistentFlags().Set("json", "false")
+	}
 	viper.Set("api_server_url", server.URL)
 	viper.Set("access_token", "test-token")
 	// Reset flags that accumulate across Execute() calls in the same process.
@@ -149,14 +153,12 @@ func TestNoteListJSON(t *testing.T) {
 	server := noteListMockServer(t, nil)
 	defer server.Close()
 	setupNoteTest(t, server)
-	viper.Set("output", "json")
-	t.Cleanup(func() { viper.Set("output", "") })
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
-	rootCmd.SetArgs([]string{"note", "list"})
+	rootCmd.SetArgs([]string{"note", "list", "--json"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("note list -o json failed: %v", err)
+		t.Fatalf("note list --json failed: %v", err)
 	}
 
 	var list api.NoteListResponse

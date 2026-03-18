@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -23,7 +22,7 @@ var tableListCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Example: `  fm table list
   fm table list -L 10 -p 2
-  fm table list -o json`,
+  fm table list --json`,
 	RunE: runTableList,
 }
 
@@ -41,7 +40,7 @@ var tableViewCmd = &cobra.Command{
 	Use:   "view <table-id>",
 	Short: "View a table",
 	Example: `  fm table view <table-id>
-  fm table view <table-id> -o json`,
+  fm table view <table-id> --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runTableView,
 }
@@ -153,19 +152,12 @@ func runTableList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing tables: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printTableListTable(cmd, list)
-	case "text", "":
-		return printTableListText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printTableListText(cmd, list)
 }
 
 func printTableListText(cmd *cobra.Command, list *api.TableListResponse) error {
@@ -179,15 +171,6 @@ func printTableListText(cmd *cobra.Command, list *api.TableListResponse) error {
 		fmt.Fprintf(w, "%s  %s  %d cols  %s\n", t.ID, truncate(t.Name, 30), len(t.Columns), t.CreatedAt.Format("2006-01-02 15:04"))
 	}
 	return nil
-}
-
-func printTableListTable(cmd *cobra.Command, list *api.TableListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tCOLUMNS\tCREATED")
-	for _, t := range list.Items {
-		fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", t.ID, truncate(t.Name, 30), len(t.Columns), t.CreatedAt.Format("2006-01-02 15:04"))
-	}
-	return w.Flush()
 }
 
 func runTableCreate(cmd *cobra.Command, args []string) error {
@@ -218,16 +201,13 @@ func runTableCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating table: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Table created: %s (id=%s)\n", table.Name, table.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Table created: %s (id=%s)\n", table.Name, table.ID)
+	return nil
 }
 
 func runTableView(cmd *cobra.Command, args []string) error {
@@ -241,19 +221,12 @@ func runTableView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting table: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	case "table":
-		return printTableViewTable(cmd, table)
-	case "text", "":
-		return printTableViewText(cmd, table)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printTableViewText(cmd, table)
 }
 
 func printTableViewText(cmd *cobra.Command, table *api.Table) error {
@@ -273,30 +246,6 @@ func printTableViewText(cmd *cobra.Command, table *api.Table) error {
 			}
 			fmt.Fprintf(w, "  %s  %s  %s%s\n", col.ID, col.Name, col.Type, req)
 		}
-	}
-	return nil
-}
-
-func printTableViewTable(cmd *cobra.Command, table *api.Table) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "FIELD\tVALUE")
-	fmt.Fprintf(w, "ID\t%s\n", table.ID)
-	fmt.Fprintf(w, "Name\t%s\n", table.Name)
-	fmt.Fprintf(w, "Description\t%s\n", table.Description)
-	fmt.Fprintf(w, "Created\t%s\n", table.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(w, "Updated\t%s\n", table.UpdatedAt.Format("2006-01-02 15:04:05"))
-	if err := w.Flush(); err != nil {
-		return err
-	}
-
-	if len(table.Columns) > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "\nColumns:\n")
-		cw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-		fmt.Fprintln(cw, "ID\tNAME\tTYPE\tREQUIRED")
-		for _, col := range table.Columns {
-			fmt.Fprintf(cw, "%s\t%s\t%s\t%v\n", col.ID, col.Name, col.Type, col.IsRequired)
-		}
-		return cw.Flush()
 	}
 	return nil
 }
@@ -326,16 +275,13 @@ func runTableEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating table: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Table updated: %s (id=%s)\n", table.Name, table.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Table updated: %s (id=%s)\n", table.Name, table.ID)
+	return nil
 }
 
 func runTableDelete(cmd *cobra.Command, args []string) error {
@@ -348,16 +294,13 @@ func runTableDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting table: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"id": args[0], "status": "deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Table deleted: %s\n", args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Table deleted: %s\n", args[0])
+	return nil
 }
 
 func runTableTrash(cmd *cobra.Command, args []string) error {
@@ -373,19 +316,12 @@ func runTableTrash(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing trashed tables: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printTableTrashTable(cmd, list)
-	case "text", "":
-		return printTableTrashText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printTableTrashText(cmd, list)
 }
 
 func printTableTrashText(cmd *cobra.Command, list *api.TableListResponse) error {
@@ -405,19 +341,6 @@ func printTableTrashText(cmd *cobra.Command, list *api.TableListResponse) error 
 	return nil
 }
 
-func printTableTrashTable(cmd *cobra.Command, list *api.TableListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tDELETED\tNAME\tCOLUMNS")
-	for _, t := range list.Items {
-		deletedAt := ""
-		if t.DeletedAt != nil {
-			deletedAt = t.DeletedAt.Format("2006-01-02 15:04")
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d\n", t.ID, deletedAt, truncate(t.Name, 30), len(t.Columns))
-	}
-	return w.Flush()
-}
-
 func runTableTrashView(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -429,19 +352,12 @@ func runTableTrashView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting trashed table: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	case "table":
-		return printTableViewTable(cmd, table)
-	case "text", "":
-		return printTableViewText(cmd, table)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printTableViewText(cmd, table)
 }
 
 func runTableRestore(cmd *cobra.Command, args []string) error {
@@ -455,16 +371,13 @@ func runTableRestore(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("restoring table: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Table restored: %s (id=%s)\n", table.Name, table.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Table restored: %s (id=%s)\n", table.Name, table.ID)
+	return nil
 }
 
 func runTableTrashDelete(cmd *cobra.Command, args []string) error {
@@ -477,33 +390,23 @@ func runTableTrashDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("permanently deleting table: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Table permanently deleted: %s\n", args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Table permanently deleted: %s\n", args[0])
+	return nil
 }
 
 // printTableColumns prints the column list from a table (used by field commands).
 func printTableColumns(cmd *cobra.Command, table *api.Table) error {
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(table)
-	case "table":
-		return printTableViewTable(cmd, table)
-	case "text", "":
-		return printTableViewText(cmd, table)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printTableViewText(cmd, table)
 }
 
 // columnTypeNames returns valid column type names for help text.

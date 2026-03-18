@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -64,8 +63,7 @@ var driveListCmd = &cobra.Command{
 	Example: `  fm drive list
   fm drive list -L 10 -p 2
   fm drive list --prefix /reports
-  fm drive list -o json
-  fm drive list -o table`,
+  fm drive list --json`,
 	RunE: runDriveList,
 }
 
@@ -76,7 +74,7 @@ var driveUploadCmd = &cobra.Command{
 	Example: `  fm drive upload ./report.pdf
   fm drive upload ./data.csv --path /reports/2024/data.csv
   echo "hello" | fm drive upload --path /notes/hello.txt
-  fm drive upload ./image.png -o json`,
+  fm drive upload ./image.png --json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runDriveUpload,
 }
@@ -97,8 +95,7 @@ var driveViewCmd = &cobra.Command{
 	Short: "View file metadata",
 	Example: `  fm drive view /docs/readme.txt
   fm drive view 550e8400-e29b-41d4-a716-446655440000
-  fm drive view /docs/readme.txt -o json
-  fm drive view /docs/readme.txt -o table`,
+  fm drive view /docs/readme.txt --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDriveView,
 }
@@ -109,7 +106,7 @@ var driveDeleteCmd = &cobra.Command{
 	Long:  `Move a file to trash. Use "drive trash" to list trashed files and "drive restore" to recover them.`,
 	Example: `  fm drive delete /docs/readme.txt
   fm drive delete 550e8400-e29b-41d4-a716-446655440000
-  fm drive delete /docs/readme.txt -o json`,
+  fm drive delete /docs/readme.txt --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDriveDelete,
 }
@@ -211,19 +208,12 @@ func runDriveList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing files: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printDriveListTable(cmd, list)
-	case "text", "":
-		return printDriveListText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printDriveListText(cmd, list)
 }
 
 func printDriveListText(cmd *cobra.Command, list *api.DriveListResponse) error {
@@ -237,15 +227,6 @@ func printDriveListText(cmd *cobra.Command, list *api.DriveListResponse) error {
 		fmt.Fprintf(w, "%s  %s  %s  %s\n", obj.ID, obj.UpdatedAt.Format("2006-01-02 15:04"), formatSize(obj.SizeBytes), obj.Path)
 	}
 	return nil
-}
-
-func printDriveListTable(cmd *cobra.Command, list *api.DriveListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tUPDATED\tSIZE\tPATH")
-	for _, obj := range list.Items {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", obj.ID, obj.UpdatedAt.Format("2006-01-02 15:04"), formatSize(obj.SizeBytes), obj.Path)
-	}
-	return w.Flush()
 }
 
 func runDriveUpload(cmd *cobra.Command, args []string) error {
@@ -312,18 +293,13 @@ func runDriveUpload(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("completing upload: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(obj)
-	case "text", "":
-		fmt.Fprintf(cmd.OutOrStdout(), "Uploaded: %s  size=%s  id=%s\n", obj.Path, formatSize(obj.SizeBytes), obj.ID)
-		return nil
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Uploaded: %s  size=%s  id=%s\n", obj.Path, formatSize(obj.SizeBytes), obj.ID)
+	return nil
 }
 
 func runDriveDownload(cmd *cobra.Command, args []string) error {
@@ -405,19 +381,12 @@ func runDriveView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting file: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(obj)
-	case "table":
-		return printDriveViewTable(cmd, obj)
-	case "text", "":
-		return printDriveViewText(cmd, obj)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printDriveViewText(cmd, obj)
 }
 
 func printDriveViewText(cmd *cobra.Command, obj *api.DriveObject) error {
@@ -433,20 +402,6 @@ func printDriveViewText(cmd *cobra.Command, obj *api.DriveObject) error {
 	return nil
 }
 
-func printDriveViewTable(cmd *cobra.Command, obj *api.DriveObject) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "FIELD\tVALUE")
-	fmt.Fprintf(w, "ID\t%s\n", obj.ID)
-	fmt.Fprintf(w, "Path\t%s\n", obj.Path)
-	fmt.Fprintf(w, "Size\t%s\n", formatSize(obj.SizeBytes))
-	fmt.Fprintf(w, "MIME type\t%s\n", obj.MimeType)
-	fmt.Fprintf(w, "Visibility\t%s\n", obj.Visibility)
-	fmt.Fprintf(w, "ETag\t%s\n", obj.ETag)
-	fmt.Fprintf(w, "Created\t%s\n", obj.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(w, "Updated\t%s\n", obj.UpdatedAt.Format("2006-01-02 15:04:05"))
-	return w.Flush()
-}
-
 func runDriveTrash(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -460,19 +415,12 @@ func runDriveTrash(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing trashed files: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printDriveTrashTable(cmd, list)
-	case "text", "":
-		return printDriveTrashText(cmd, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printDriveTrashText(cmd, list)
 }
 
 func printDriveTrashText(cmd *cobra.Command, list *api.DriveListResponse) error {
@@ -492,19 +440,6 @@ func printDriveTrashText(cmd *cobra.Command, list *api.DriveListResponse) error 
 	return nil
 }
 
-func printDriveTrashTable(cmd *cobra.Command, list *api.DriveListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tDELETED\tSIZE\tPATH")
-	for _, obj := range list.Items {
-		deletedAt := ""
-		if obj.DeletedAt != nil {
-			deletedAt = obj.DeletedAt.Format("2006-01-02 15:04")
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", obj.ID, deletedAt, formatSize(obj.SizeBytes), obj.Path)
-	}
-	return w.Flush()
-}
-
 func runDriveTrashView(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -516,19 +451,12 @@ func runDriveTrashView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting trashed file: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(obj)
-	case "table":
-		return printDriveViewTable(cmd, obj)
-	case "text", "":
-		return printDriveViewText(cmd, obj)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printDriveViewText(cmd, obj)
 }
 
 func runDriveTrashDownload(cmd *cobra.Command, args []string) error {
@@ -580,16 +508,13 @@ func runDriveRestore(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("restoring file: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(obj)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "File restored: %s (id=%s)\n", obj.Path, obj.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "File restored: %s (id=%s)\n", obj.Path, obj.ID)
+	return nil
 }
 
 func runDriveTrashDelete(cmd *cobra.Command, args []string) error {
@@ -602,16 +527,13 @@ func runDriveTrashDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("permanently deleting file: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "File permanently deleted: %s\n", args[0])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "File permanently deleted: %s\n", args[0])
+	return nil
 }
 
 func runDriveDelete(cmd *cobra.Command, args []string) error {
@@ -631,16 +553,11 @@ func runDriveDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting file: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(obj)
-	case "text", "":
-		fmt.Fprintf(cmd.OutOrStdout(), "Deleted: %s (id=%s)\n", obj.Path, obj.ID)
-		return nil
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Deleted: %s (id=%s)\n", obj.Path, obj.ID)
+	return nil
 }
