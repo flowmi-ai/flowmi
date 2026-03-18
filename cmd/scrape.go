@@ -13,7 +13,7 @@ import (
 var scrapeCmd = &cobra.Command{
 	Use:   "scrape <url>",
 	Short: "Scrape a web page",
-	Long:  `Fetch and extract content from a web page. Returns plain text by default, or markdown with --markdown.`,
+	Long:  `Fetch and extract content from a web page as markdown.`,
 	Args:  cobra.ExactArgs(1),
 	RunE:  runScrape,
 }
@@ -51,11 +51,6 @@ func runScrape(cmd *cobra.Command, args []string) error {
 }
 
 func printScrapeText(cmd *cobra.Command, result *api.ScrapeResponse) error {
-	w := cmd.OutOrStdout()
-	if result.Markdown != "" {
-		fmt.Fprintln(w, result.Markdown)
-	} else {
-		fmt.Fprintln(w, result.Text)
-	}
+	fmt.Fprintln(cmd.OutOrStdout(), result.Markdown)
 	return nil
 }

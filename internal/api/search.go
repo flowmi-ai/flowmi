@@ -96,8 +96,7 @@ type NewsSearchResponse struct {
 }
 
 type ScrapeResponse struct {
-	Text     string            `json:"text"`
-	Markdown string            `json:"markdown,omitempty"`
+	Markdown string            `json:"markdown"`
 	Metadata map[string]string `json:"metadata"`
 	Credits  int               `json:"credits"`
 }

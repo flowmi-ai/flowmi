@@ -387,7 +387,6 @@ func TestScrape(t *testing.T) {
 		json.NewEncoder(w).Encode(Response{
 			Success: true,
 			Data: mustMarshal(t, &ScrapeResponse{
-				Text:     "Example Domain",
 				Markdown: "# Example Domain",
 				Metadata: map[string]string{"title": "Example Domain"},
 				Credits:  1,
@@ -403,9 +402,6 @@ func TestScrape(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Scrape() error: %v", err)
-	}
-	if result.Text != "Example Domain" {
-		t.Errorf("Text = %q, want Example Domain", result.Text)
 	}
 	if result.Markdown != "# Example Domain" {
 		t.Errorf("Markdown = %q, want # Example Domain", result.Markdown)

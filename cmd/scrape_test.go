@@ -22,7 +22,6 @@ func scrapeMockServer(t *testing.T, check func(r *http.Request)) *httptest.Serve
 		json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
 			"data": map[string]any{
-				"text":     "Example Domain content",
 				"markdown": "# Example Domain\n\nContent here",
 				"metadata": map[string]string{"title": "Example Domain"},
 				"credits":  1,
@@ -92,8 +91,8 @@ func TestScrapeJSON(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("JSON output not parseable: %v\nOutput:\n%s", err, buf.String())
 	}
-	if result.Text != "Example Domain content" {
-		t.Errorf("Text = %q, want Example Domain content", result.Text)
+	if result.Markdown != "# Example Domain\n\nContent here" {
+		t.Errorf("Markdown = %q, want # Example Domain\\n\\nContent here", result.Markdown)
 	}
 }
 
