@@ -194,7 +194,7 @@ func pollAndOutputJSON(cmd *cobra.Command, client *api.Client, requestID string)
 			continue
 		}
 
-		// Download file if --output-file is set and video is ready.
+		// Download file if --output is set and video is ready.
 		var savedTo string
 		outFile, _ := cmd.Flags().GetString("output")
 		if outFile != "" && status.Status == "done" && status.Video != nil {

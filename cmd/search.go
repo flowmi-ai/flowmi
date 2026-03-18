@@ -255,5 +255,3 @@ func printNewsSearchText(cmd *cobra.Command, query string, result *api.NewsSearc
 	}
 	return nil
 }
-
-
