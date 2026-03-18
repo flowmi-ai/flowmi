@@ -31,7 +31,7 @@ The generated image is saved to a file by default.`,
   flowmi image generate -p "Remove the background" -i photo.jpg
   flowmi image generate -p "Blend these two" -i a.jpg -i b.jpg --aspect-ratio 16:9
   flowmi image generate -p "Hi-res landscape" --size 4K --model gemini-3-pro-image-preview
-  flowmi image generate -p "A logo" -f logo.png`,
+  flowmi image generate -p "A logo" -o logo.png`,
 	RunE: runImageGenerate,
 }
 
@@ -41,7 +41,7 @@ func init() {
 	imageGenerateCmd.Flags().StringP("model", "m", "", "model: {gemini-3.1-flash-image-preview|gemini-3-pro-image-preview|grok-imagine-image|grok-imagine-image-pro} (default \"gemini-3.1-flash-image-preview\")")
 	imageGenerateCmd.Flags().StringP("aspect-ratio", "a", "", "output aspect ratio: {auto|1:1|2:3|3:2|3:4|4:3|4:5|5:4|9:16|16:9|21:9|1:4|4:1|1:8|8:1|2:1|1:2|19.5:9|9:19.5|20:9|9:20} (default \"auto\")")
 	imageGenerateCmd.Flags().StringP("size", "s", "", "output resolution: {512|1K|1k|2K|2k|4K} (default \"1K\")")
-	imageGenerateCmd.Flags().StringP("output-file", "f", "", "output file path (default: generated_<timestamp>.<ext>)")
+	imageGenerateCmd.Flags().StringP("output", "o", "", "output file path (default: generated_<timestamp>.<ext>)")
 	imageGenerateCmd.MarkFlagRequired("prompt")
 
 	imageCmd.AddCommand(imageGenerateCmd)
@@ -101,17 +101,12 @@ func runImageGenerate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
-	case "text", "":
-		return saveAndPrintImage(cmd, result)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return saveAndPrintImage(cmd, result)
 }
 
 // encodeImageFile reads an image file and returns a ReferenceImage with base64 data.
@@ -139,7 +134,7 @@ func saveAndPrintImage(cmd *cobra.Command, result *api.ImageGenerateResponse) er
 		return fmt.Errorf("decoding image data: %w", err)
 	}
 
-	outFile, _ := cmd.Flags().GetString("output-file")
+	outFile, _ := cmd.Flags().GetString("output")
 	if outFile == "" {
 		ext := extFromMime(result.MimeType)
 		outFile = fmt.Sprintf("generated_%s%s", time.Now().Format("20060102_150405"), ext)

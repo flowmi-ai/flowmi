@@ -51,8 +51,8 @@ Generate search queries based on the triage. Do not use a fixed number — use a
 **Commands:**
 
 ```bash
-flowmi search "<query>" -o json -L 10
-flowmi search news "<query>" -o json -L 10 --time week
+flowmi search "<query>" --json -L 10
+flowmi search news "<query>" --json -L 10 --time week
 ```
 
 Run all initial queries in parallel.
@@ -79,7 +79,7 @@ Select URLs to scrape based on the topic type. See [references/source-quality.md
 ## 4. Scrape and Read
 
 ```bash
-flowmi scrape "<url>" -o json
+flowmi scrape "<url>" --json
 ```
 
 Scrape in parallel. Use the `markdown` field (preferred over `text`).
@@ -164,13 +164,13 @@ User asks: *"Compare Fly.io vs Railway for deploying Go APIs"*
 
 1. **Triage**: technical + company, timeless (mostly), global, medium stakes, comparison output
 2. **Search** (4 queries in parallel):
-   - `flowmi search "Fly.io vs Railway Go deployment" -o json -L 10`
-   - `flowmi search "Fly.io Go API hosting review 2025" -o json -L 10`
-   - `flowmi search "Railway Go deployment experience" -o json -L 10`
-   - `flowmi search "Fly.io Railway pricing comparison" -o json -L 10`
+   - `flowmi search "Fly.io vs Railway Go deployment" --json -L 10`
+   - `flowmi search "Fly.io Go API hosting review 2025" --json -L 10`
+   - `flowmi search "Railway Go deployment experience" --json -L 10`
+   - `flowmi search "Fly.io Railway pricing comparison" --json -L 10`
 3. **Source selection**: pick official docs (fly.io/docs, docs.railway.app), pricing pages, 2-3 practitioner comparison posts, 1 migration case study — 6-8 URLs total
 4. **Scrape** all selected URLs in parallel
-5. **Assess coverage**: pricing covered, DX covered, but cold start performance data is thin → 1 follow-up query: `flowmi search "Fly.io Railway cold start latency benchmark" -o json -L 5`
+5. **Assess coverage**: pricing covered, DX covered, but cold start performance data is thin → 1 follow-up query: `flowmi search "Fly.io Railway cold start latency benchmark" --json -L 5`
 6. **Evidence ledger**: build internally, noting that cold start data comes from a single blog post (medium confidence)
 7. **Synthesize**: use the Comparison template — TL;DR, criteria table, trade-offs, evidence quality notes, sources
 
@@ -200,11 +200,11 @@ Adjust `-L` based on topic breadth: 5 for focused factual queries, 10 for standa
 
 | Command | Purpose |
 |---------|---------|
-| `flowmi search "<q>" -o json -L 10` | Web search, 10 results |
-| `flowmi search news "<q>" -o json -L 10 --time week` | News search, past week |
-| `flowmi search news "<q>" -o json -L 10 --time month` | News search, past month |
-| `flowmi search "<q>" -o json -L 10 --country us --language en` | Locale-specific search |
-| `flowmi scrape "<url>" -o json` | Full page scrape (returns markdown + text) |
+| `flowmi search "<q>" --json -L 10` | Web search, 10 results |
+| `flowmi search news "<q>" --json -L 10 --time week` | News search, past week |
+| `flowmi search news "<q>" --json -L 10 --time month` | News search, past month |
+| `flowmi search "<q>" --json -L 10 --country us --language en` | Locale-specific search |
+| `flowmi scrape "<url>" --json` | Full page scrape (returns markdown + text) |
 
 ## Output Delivery
 

@@ -95,12 +95,11 @@ Use `flowmi <command> --help` for detailed usage of any command.
 
 ## Output formats
 
-All commands support `--output` (`-o`) to control output format:
+All commands support `--json` for machine-readable output:
 
 ```bash
-flowmi note list -o json     # JSON output
-flowmi note list -o table    # Table output
-flowmi note list -o text     # Text output (default)
+flowmi note list --json     # JSON output
+flowmi note list             # Human-readable output (default)
 ```
 
 ## Configuration

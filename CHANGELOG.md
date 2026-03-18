@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Structured error handling with error codes, hints, and exit code mapping
 - NO_COLOR and TERM=dumb support
 - Credential masking in `fm config list`
-- JSON help output (`--help --format json`)
+- JSON help output (`--help --json`)
 - GoReleaser configuration for cross-platform builds
 - GitHub Actions CI/CD (test, lint, build, release)
 

@@ -75,6 +75,10 @@ func newsSearchMockServer(t *testing.T, check func(r *http.Request)) *httptest.S
 
 func setupSearchTest(t *testing.T, server *httptest.Server) {
 	t.Helper()
+	if f := rootCmd.PersistentFlags().Lookup("json"); f != nil {
+		f.Changed = false
+		_ = rootCmd.PersistentFlags().Set("json", "false")
+	}
 	viper.Set("api_server_url", server.URL)
 	viper.Set("access_token", "test-token")
 	t.Cleanup(func() {
@@ -134,14 +138,12 @@ func TestSearchWebJSON(t *testing.T) {
 	server := webSearchMockServer(t, nil)
 	defer server.Close()
 	setupSearchTest(t, server)
-	viper.Set("output", "json")
-	t.Cleanup(func() { viper.Set("output", "") })
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
-	rootCmd.SetArgs([]string{"search", "web", "test"})
+	rootCmd.SetArgs([]string{"search", "web", "test", "--json"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("search web -o json failed: %v", err)
+		t.Fatalf("search web --json failed: %v", err)
 	}
 
 	var result api.WebSearchResponse

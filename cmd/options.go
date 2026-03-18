@@ -3,9 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var optionsCmd = &cobra.Command{
@@ -13,11 +13,10 @@ var optionsCmd = &cobra.Command{
 	Short: "Show global flags",
 	Long:  "Show global flags used across all commands.",
 	Example: `  flowmi options
-  flowmi options --format json`,
+  flowmi options --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		format, _ := cmd.Flags().GetString("format")
-		if strings.EqualFold(format, "json") {
+		if viper.GetBool("json") {
 			payload := struct {
 				Command string     `json:"command"`
 				Flags   []helpFlag `json:"flags"`

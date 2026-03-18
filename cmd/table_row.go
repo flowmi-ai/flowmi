@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -26,7 +25,7 @@ var tableRowListCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Example: `  fm table row list <table-id>
   fm table row list <table-id> -L 10 -p 2
-  fm table row list <table-id> -o json`,
+  fm table row list <table-id> --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runTableRowList,
 }
@@ -45,7 +44,7 @@ var tableRowViewCmd = &cobra.Command{
 	Use:   "view <table-id> <row-id>",
 	Short: "View a row",
 	Example: `  fm table row view <table-id> <row-id>
-  fm table row view <table-id> <row-id> -o json`,
+  fm table row view <table-id> <row-id> --json`,
 	Args: cobra.ExactArgs(2),
 	RunE: runTableRowView,
 }
@@ -273,19 +272,12 @@ func runTableRowList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing rows: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printRowListTable(cmd, table, list)
-	case "text", "":
-		return printRowListText(cmd, table, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printRowListText(cmd, table, list)
 }
 
 func printRowListText(cmd *cobra.Command, table *api.Table, list *api.RowListResponse) error {
@@ -300,29 +292,6 @@ func printRowListText(cmd *cobra.Command, table *api.Table, list *api.RowListRes
 		fmt.Fprintf(w, "%s  %s  %s\n", row.ID, row.CreatedAt.Format("2006-01-02 15:04"), fields)
 	}
 	return nil
-}
-
-func printRowListTable(cmd *cobra.Command, table *api.Table, list *api.RowListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-
-	// Build header: ID + column names + CREATED
-	headers := []string{"ID"}
-	for _, col := range table.Columns {
-		headers = append(headers, strings.ToUpper(col.Name))
-	}
-	headers = append(headers, "CREATED")
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
-
-	for _, row := range list.Items {
-		parts := []string{row.ID}
-		for _, col := range table.Columns {
-			val := formatCellValue(row.Data[col.Name])
-			parts = append(parts, truncate(val, 30))
-		}
-		parts = append(parts, row.CreatedAt.Format("2006-01-02 15:04"))
-		fmt.Fprintln(w, strings.Join(parts, "\t"))
-	}
-	return w.Flush()
 }
 
 func formatRowFields(table *api.Table, row *api.Row) string {
@@ -370,16 +339,13 @@ func runTableRowCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating row: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(row)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Row created: %s\n", row.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Row created: %s\n", row.ID)
+	return nil
 }
 
 func runTableRowView(cmd *cobra.Command, args []string) error {
@@ -393,19 +359,12 @@ func runTableRowView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting row: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(row)
-	case "table":
-		return printRowViewTable(cmd, row)
-	case "text", "":
-		return printRowViewText(cmd, row)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printRowViewText(cmd, row)
 }
 
 func printRowViewText(cmd *cobra.Command, row *api.Row) error {
@@ -419,19 +378,6 @@ func printRowViewText(cmd *cobra.Command, row *api.Row) error {
 		fmt.Fprintf(w, "  %s: %s\n", k, formatCellValue(v))
 	}
 	return nil
-}
-
-func printRowViewTable(cmd *cobra.Command, row *api.Row) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "FIELD\tVALUE")
-	fmt.Fprintf(w, "ID\t%s\n", row.ID)
-	fmt.Fprintf(w, "Table\t%s\n", row.TableID)
-	fmt.Fprintf(w, "Created\t%s\n", row.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(w, "Updated\t%s\n", row.UpdatedAt.Format("2006-01-02 15:04:05"))
-	for k, v := range row.Data {
-		fmt.Fprintf(w, "%s\t%s\n", k, formatCellValue(v))
-	}
-	return w.Flush()
 }
 
 func runTableRowEdit(cmd *cobra.Command, args []string) error {
@@ -450,16 +396,13 @@ func runTableRowEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating row: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(row)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Row updated: %s\n", row.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Row updated: %s\n", row.ID)
+	return nil
 }
 
 func runTableRowDelete(cmd *cobra.Command, args []string) error {
@@ -472,16 +415,13 @@ func runTableRowDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting row: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"tableId": args[0], "rowId": args[1], "status": "deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Row deleted: %s\n", args[1])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Row deleted: %s\n", args[1])
+	return nil
 }
 
 // parseAggregate parses "fn:column:alias" into an AggregateFunc.
@@ -566,19 +506,12 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("querying grouped rows: %w", err)
 		}
 
-		output := viper.GetString("output")
-		switch output {
-		case "json":
+		if viper.GetBool("json") {
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
 			return enc.Encode(resp)
-		case "table":
-			return printGroupByTable(cmd, resp, groupByCols, aliases)
-		case "text", "":
-			return printGroupByText(cmd, resp, groupByCols, aliases)
-		default:
-			return fmt.Errorf("unsupported output format: %s", output)
 		}
+		return printGroupByText(cmd, resp, groupByCols, aliases)
 	}
 
 	// Aggregate mode: different response shape, skip table schema
@@ -600,19 +533,12 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("aggregating rows: %w", err)
 		}
 
-		output := viper.GetString("output")
-		switch output {
-		case "json":
+		if viper.GetBool("json") {
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
 			return enc.Encode(resp)
-		case "table":
-			return printAggregateTable(cmd, resp, aliases)
-		case "text", "":
-			return printAggregateText(cmd, resp, aliases)
-		default:
-			return fmt.Errorf("unsupported output format: %s", output)
 		}
+		return printAggregateText(cmd, resp, aliases)
 	}
 
 	// Fetch table schema for column display
@@ -626,19 +552,12 @@ func runTableRowQuery(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("querying rows: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printRowListTable(cmd, table, list)
-	case "text", "":
-		return printRowListText(cmd, table, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printRowListText(cmd, table, list)
 }
 
 func printAggregateText(cmd *cobra.Command, resp *api.AggregateResponse, aliases []string) error {
@@ -647,15 +566,6 @@ func printAggregateText(cmd *cobra.Command, resp *api.AggregateResponse, aliases
 		fmt.Fprintf(w, "%s: %s\n", k, formatCellValue(resp.Results[k]))
 	}
 	return nil
-}
-
-func printAggregateTable(cmd *cobra.Command, resp *api.AggregateResponse, aliases []string) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "METRIC\tVALUE")
-	for _, k := range aliases {
-		fmt.Fprintf(w, "%s\t%s\n", k, formatCellValue(resp.Results[k]))
-	}
-	return w.Flush()
 }
 
 func printGroupByText(cmd *cobra.Command, resp *api.GroupByResponse, groupCols, aliases []string) error {
@@ -677,31 +587,6 @@ func printGroupByText(cmd *cobra.Command, resp *api.GroupByResponse, groupCols, 
 		}
 	}
 	return nil
-}
-
-func printGroupByTable(cmd *cobra.Command, resp *api.GroupByResponse, groupCols, aliases []string) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-
-	headers := make([]string, 0, len(groupCols)+len(aliases))
-	for _, col := range groupCols {
-		headers = append(headers, strings.ToUpper(col))
-	}
-	for _, alias := range aliases {
-		headers = append(headers, strings.ToUpper(alias))
-	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
-
-	for _, group := range resp.Groups {
-		parts := make([]string, 0, len(groupCols)+len(aliases))
-		for _, col := range groupCols {
-			parts = append(parts, formatCellValue(group[col]))
-		}
-		for _, alias := range aliases {
-			parts = append(parts, formatCellValue(group[alias]))
-		}
-		fmt.Fprintln(w, strings.Join(parts, "\t"))
-	}
-	return w.Flush()
 }
 
 func runTableRowTrash(cmd *cobra.Command, args []string) error {
@@ -728,19 +613,12 @@ func runTableRowTrash(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing trashed rows: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(list)
-	case "table":
-		return printRowTrashTable(cmd, table, list)
-	case "text", "":
-		return printRowTrashText(cmd, table, list)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printRowTrashText(cmd, table, list)
 }
 
 func printRowTrashText(cmd *cobra.Command, table *api.Table, list *api.RowListResponse) error {
@@ -761,30 +639,6 @@ func printRowTrashText(cmd *cobra.Command, table *api.Table, list *api.RowListRe
 	return nil
 }
 
-func printRowTrashTable(cmd *cobra.Command, table *api.Table, list *api.RowListResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-
-	headers := []string{"ID", "DELETED"}
-	for _, col := range table.Columns {
-		headers = append(headers, strings.ToUpper(col.Name))
-	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
-
-	for _, row := range list.Items {
-		deletedAt := ""
-		if row.DeletedAt != nil {
-			deletedAt = row.DeletedAt.Format("2006-01-02 15:04")
-		}
-		parts := []string{row.ID, deletedAt}
-		for _, col := range table.Columns {
-			val := formatCellValue(row.Data[col.Name])
-			parts = append(parts, truncate(val, 30))
-		}
-		fmt.Fprintln(w, strings.Join(parts, "\t"))
-	}
-	return w.Flush()
-}
-
 func runTableRowTrashView(cmd *cobra.Command, args []string) error {
 	client, err := newAPIClient()
 	if err != nil {
@@ -796,19 +650,12 @@ func runTableRowTrashView(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting trashed row: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(row)
-	case "table":
-		return printRowViewTable(cmd, row)
-	case "text", "":
-		return printRowViewText(cmd, row)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printRowViewText(cmd, row)
 }
 
 func runTableRowRestore(cmd *cobra.Command, args []string) error {
@@ -822,16 +669,13 @@ func runTableRowRestore(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("restoring row: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(row)
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Row restored: %s\n", row.ID)
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Row restored: %s\n", row.ID)
+	return nil
 }
 
 func runTableRowTrashDelete(cmd *cobra.Command, args []string) error {
@@ -844,14 +688,11 @@ func runTableRowTrashDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("permanently deleting row: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]string{"tableId": args[0], "rowId": args[1], "status": "permanently deleted"})
-	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Row permanently deleted: %s\n", args[1])
-		return nil
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Row permanently deleted: %s\n", args[1])
+	return nil
 }

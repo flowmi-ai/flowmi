@@ -25,9 +25,9 @@ func runHelpOutput(t *testing.T, args ...string) string {
 }
 
 func resetHelpState() {
-	if f := rootCmd.PersistentFlags().Lookup("format"); f != nil {
+	if f := rootCmd.PersistentFlags().Lookup("json"); f != nil {
 		f.Changed = false
-		_ = rootCmd.PersistentFlags().Set("format", "text")
+		_ = rootCmd.PersistentFlags().Set("json", "false")
 	}
 }
 
@@ -72,8 +72,8 @@ func TestOptionsCommand_ShowsGlobalFlags(t *testing.T) {
 	if !strings.Contains(output, "--config") {
 		t.Fatalf("options should include --config:\n%s", output)
 	}
-	if !strings.Contains(output, "--output") {
-		t.Fatalf("options should include --output:\n%s", output)
+	if !strings.Contains(output, "--json") {
+		t.Fatalf("options should include --json:\n%s", output)
 	}
 }
 
@@ -92,13 +92,13 @@ func TestLoginHelp_ShowsExamplesAndHint(t *testing.T) {
 	if !strings.Contains(output, "Examples:") {
 		t.Fatalf("help should include examples:\n%s", output)
 	}
-	if !strings.Contains(output, "common: --config, --output") {
+	if !strings.Contains(output, "common: --config, --json") {
 		t.Fatalf("help should include common global flag hint:\n%s", output)
 	}
 }
 
 func TestHelpJSONFormat(t *testing.T) {
-	output := runHelpOutput(t, "auth", "login", "--help", "--format", "json")
+	output := runHelpOutput(t, "auth", "login", "--help", "--json")
 	var payload struct {
 		Path  string `json:"path"`
 		Flags struct {
@@ -121,7 +121,7 @@ func TestHelpJSONFormat(t *testing.T) {
 }
 
 func TestOptionsCommand_JSONFormat(t *testing.T) {
-	output := runHelpOutput(t, "options", "--format", "json")
+	output := runHelpOutput(t, "options", "--json")
 	var payload struct {
 		Command string     `json:"command"`
 		Flags   []helpFlag `json:"flags"`

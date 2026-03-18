@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/flowmi-ai/flowmi/internal/api"
 	"github.com/spf13/cobra"
@@ -93,19 +92,12 @@ func runSearchWeb(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("searching: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
-	case "table":
-		return printWebSearchTable(cmd, query, result)
-	case "text", "":
-		return printWebSearchText(cmd, query, result)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printWebSearchText(cmd, query, result)
 }
 
 func printWebSearchText(cmd *cobra.Command, query string, result *api.WebSearchResponse) error {
@@ -124,15 +116,6 @@ func printWebSearchText(cmd *cobra.Command, query string, result *api.WebSearchR
 		fmt.Fprintln(w)
 	}
 	return nil
-}
-
-func printWebSearchTable(cmd *cobra.Command, _ string, result *api.WebSearchResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "#\tTITLE\tURL")
-	for i, r := range result.Organic {
-		fmt.Fprintf(w, "%2d\t%s\t%s\n", i+1, truncate(r.Title, 50), r.Link)
-	}
-	return w.Flush()
 }
 
 func runSearchImages(cmd *cobra.Command, args []string) error {
@@ -174,19 +157,12 @@ func runSearchImages(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("searching images: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
-	case "table":
-		return printImageSearchTable(cmd, query, result)
-	case "text", "":
-		return printImageSearchText(cmd, query, result)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printImageSearchText(cmd, query, result)
 }
 
 func printImageSearchText(cmd *cobra.Command, query string, result *api.ImageSearchResponse) error {
@@ -203,15 +179,6 @@ func printImageSearchText(cmd *cobra.Command, query string, result *api.ImageSea
 		fmt.Fprintln(w)
 	}
 	return nil
-}
-
-func printImageSearchTable(cmd *cobra.Command, _ string, result *api.ImageSearchResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "#\tTITLE\tSIZE\tSOURCE")
-	for i, r := range result.Images {
-		fmt.Fprintf(w, "%2d\t%s\t%d\u00d7%d\t%s\n", i+1, truncate(r.Title, 40), r.ImageWidth, r.ImageHeight, r.Domain)
-	}
-	return w.Flush()
 }
 
 func runSearchNews(cmd *cobra.Command, args []string) error {
@@ -253,19 +220,12 @@ func runSearchNews(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("searching news: %w", err)
 	}
 
-	output := viper.GetString("output")
-	switch output {
-	case "json":
+	if viper.GetBool("json") {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
-	case "table":
-		return printNewsSearchTable(cmd, query, result)
-	case "text", "":
-		return printNewsSearchText(cmd, query, result)
-	default:
-		return fmt.Errorf("unsupported output format: %s", output)
 	}
+	return printNewsSearchText(cmd, query, result)
 }
 
 func printNewsSearchText(cmd *cobra.Command, query string, result *api.NewsSearchResponse) error {
@@ -296,11 +256,4 @@ func printNewsSearchText(cmd *cobra.Command, query string, result *api.NewsSearc
 	return nil
 }
 
-func printNewsSearchTable(cmd *cobra.Command, _ string, result *api.NewsSearchResponse) error {
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "#\tTITLE\tSOURCE\tDATE")
-	for i, r := range result.News {
-		fmt.Fprintf(w, "%2d\t%s\t%s\t%s\n", i+1, truncate(r.Title, 40), r.Source, r.Date)
-	}
-	return w.Flush()
-}
+

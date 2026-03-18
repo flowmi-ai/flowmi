@@ -33,7 +33,7 @@ the video is ready, then downloads it.`,
   flowmi video generate -p "A sunset timelapse" -d 10 -a 16:9 -r 720p
   flowmi video generate -p "Animate this scene" -i photo.jpg -d 5
   flowmi video generate -p "Change the car color to red" --video-url https://example.com/video.mp4
-  flowmi video generate -p "Ocean waves" -f waves.mp4`,
+  flowmi video generate -p "Ocean waves" -o waves.mp4`,
 	RunE: runVideoGenerate,
 }
 
@@ -45,7 +45,7 @@ func init() {
 	videoGenerateCmd.Flags().StringP("model", "m", "", "model: {grok-imagine-video} (default \"grok-imagine-video\")")
 	videoGenerateCmd.Flags().StringP("aspect-ratio", "a", "", "output aspect ratio: {auto|1:1|16:9|9:16|4:3|3:4|3:2|2:3} (default \"auto\")")
 	videoGenerateCmd.Flags().StringP("resolution", "r", "", "output resolution: {480p|720p} (default \"480p\")")
-	videoGenerateCmd.Flags().StringP("output-file", "f", "", "output file path (default: generated_<timestamp>.mp4)")
+	videoGenerateCmd.Flags().StringP("output", "o", "", "output file path (default: generated_<timestamp>.mp4)")
 	videoGenerateCmd.MarkFlagRequired("prompt")
 	videoGenerateCmd.MarkFlagRequired("duration")
 
@@ -115,8 +115,7 @@ func runVideoGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 1: Submit generation request.
-	output := viper.GetString("output")
-	if output != "json" {
+	if !viper.GetBool("json") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Submitting video generation request...")
 	}
 	genResp, err := client.GenerateVideo(cmd.Context(), req)
@@ -124,7 +123,7 @@ func runVideoGenerate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if output == "json" {
+	if viper.GetBool("json") {
 		return pollAndOutputJSON(cmd, client, genResp.RequestID)
 	}
 	return pollAndDownload(cmd, client, genResp.RequestID)
@@ -160,7 +159,7 @@ func pollAndDownload(cmd *cobra.Command, client *api.Client, requestID string) e
 				return fmt.Errorf("video ready but no URL returned")
 			}
 
-			outFile, _ := cmd.Flags().GetString("output-file")
+			outFile, _ := cmd.Flags().GetString("output")
 			if outFile == "" {
 				outFile = fmt.Sprintf("generated_%s.mp4", time.Now().Format("20060102_150405"))
 			}
@@ -197,7 +196,7 @@ func pollAndOutputJSON(cmd *cobra.Command, client *api.Client, requestID string)
 
 		// Download file if --output-file is set and video is ready.
 		var savedTo string
-		outFile, _ := cmd.Flags().GetString("output-file")
+		outFile, _ := cmd.Flags().GetString("output")
 		if outFile != "" && status.Status == "done" && status.Video != nil {
 			if err := downloadFile(status.Video.URL, outFile); err != nil {
 				return fmt.Errorf("downloading video: %w", err)

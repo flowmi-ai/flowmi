@@ -21,8 +21,7 @@ var defaultHelpFunc func(*cobra.Command, []string)
 var globalHelpFlagNames = map[string]struct{}{
 	"config": {},
 	"debug":  {},
-	"format": {},
-	"output": {},
+	"json":   {},
 }
 
 const (
@@ -55,10 +54,9 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ~/.config/flowmi/config.toml)")
-	rootCmd.PersistentFlags().String("format", "text", "help/options format: text, json")
-	rootCmd.PersistentFlags().StringP("output", "o", "text", "output format: text, json, table")
+	rootCmd.PersistentFlags().Bool("json", false, "output in JSON format")
 	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging (HTTP requests/responses)")
-	viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
+	viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
 	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 
 	cobra.AddTemplateFunc("hasParentInheritedFlags", hasParentInheritedFlags)
@@ -122,7 +120,7 @@ func isRootCommand(cmd *cobra.Command) bool {
 
 func globalHelpHint(cmd *cobra.Command) string {
 	return fmt.Sprintf(
-		"Global Flags hidden by default (common: --config, --output). Run '%s options' or use '--help --format json'.",
+		"Global Flags hidden by default (common: --config, --json). Run '%s options' or use '--help --json'.",
 		cmd.Root().CommandPath(),
 	)
 }
@@ -173,8 +171,8 @@ type helpJSON struct {
 }
 
 func renderHelp(cmd *cobra.Command, args []string) {
-	format, _ := cmd.Flags().GetString("format")
-	if strings.EqualFold(format, "json") {
+	jsonFlag, _ := cmd.Flags().GetBool("json")
+	if jsonFlag {
 		if err := encodeHelpJSON(cmd); err != nil {
 			fmt.Fprintln(cmd.ErrOrStderr(), "Error:", err)
 		}
@@ -299,7 +297,7 @@ func isRequiredFlag(f *pflag.Flag) bool {
 func formatError(err error) int {
 	var apiErr *api.Error
 	if errors.As(err, &apiErr) {
-		if viper.GetString("output") == "json" {
+		if viper.GetBool("json") {
 			formatErrorJSON(apiErr)
 		} else {
 			formatErrorText(apiErr)
@@ -308,7 +306,7 @@ func formatError(err error) int {
 	}
 
 	// Unstructured error fallback.
-	if viper.GetString("output") == "json" {
+	if viper.GetBool("json") {
 		je := struct {
 			Error struct {
 				Code    string `json:"code"`
