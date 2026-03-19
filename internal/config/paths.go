@@ -5,22 +5,36 @@ import (
 	"path/filepath"
 )
 
+// configFileOverride, when non-empty, replaces the default config.toml path.
+// Set via SetConfigFile before any config reads.
+var configFileOverride string
+
+// SetConfigFile overrides the default config.toml path (e.g. from --config flag).
+func SetConfigFile(path string) {
+	configFileOverride = path
+}
+
 // ConfigDir returns the flowmi configuration directory.
-// It checks $XDG_CONFIG_HOME/flowmi first, falling back to ~/.config/flowmi.
+// It checks $XDG_CONFIG_HOME/flowmi first, falling back to a platform-specific
+// default: ~/.config/flowmi on Unix, %AppData%\flowmi on Windows.
 func ConfigDir() (string, error) {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
-		home, err := os.UserHomeDir()
+		var err error
+		base, err = defaultConfigBase()
 		if err != nil {
 			return "", err
 		}
-		base = filepath.Join(home, ".config")
 	}
 	return filepath.Join(base, "flowmi"), nil
 }
 
 // ConfigFilePath returns the full path to config.toml.
+// If SetConfigFile was called, returns that path instead.
 func ConfigFilePath() (string, error) {
+	if configFileOverride != "" {
+		return configFileOverride, nil
+	}
 	dir, err := ConfigDir()
 	if err != nil {
 		return "", err

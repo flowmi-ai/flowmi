@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -59,15 +60,27 @@ var configListCmd = &cobra.Command{
 	RunE:    runConfigList,
 }
 
+var configUseCmd = &cobra.Command{
+	Use:    "use <profile>",
+	Short:  "Switch the active profile",
+	Hidden: true,
+	Example: `  flowmi config use local
+  flowmi config use production`,
+	Args: cobra.ExactArgs(1),
+	RunE: runConfigUse,
+}
+
 func init() {
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configGetCmd)
 	configCmd.AddCommand(configListCmd)
+	configCmd.AddCommand(configUseCmd)
 	rootCmd.AddCommand(configCmd)
 }
 
 func runConfigSet(cmd *cobra.Command, args []string) error {
 	key, value := args[0], args[1]
+	profile := viper.GetString("profile")
 
 	store, ok := knownConfigKeys[key]
 	if !ok {
@@ -76,26 +89,26 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 
 	switch store {
 	case "credential":
-		creds, err := config.LoadCredentials()
+		creds, err := config.LoadCredentials(profile)
 		if err != nil {
 			return fmt.Errorf("loading credentials: %w", err)
 		}
 		creds[key] = value
-		if err := config.SaveCredentials(creds); err != nil {
+		if err := config.SaveCredentials(profile, creds); err != nil {
 			return fmt.Errorf("saving credentials: %w", err)
 		}
 	case "config":
-		cfg, err := config.LoadConfig()
+		cfg, err := config.LoadConfigProfile(profile)
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
 		}
 		cfg[key] = value
-		if err := config.SaveConfig(cfg); err != nil {
+		if err := config.SaveConfigProfile(profile, cfg); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), ui.SuccessStyle.Render(fmt.Sprintf(`Set "%s" to "%s"`, key, value)))
+	fmt.Fprintln(cmd.OutOrStdout(), ui.SuccessStyle.Render(fmt.Sprintf(`Set "%s" to "%s" (profile: %s)`, key, value, profile)))
 	return nil
 }
 
@@ -111,9 +124,26 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 }
 
 func runConfigList(cmd *cobra.Command, args []string) error {
+	profile := viper.GetString("profile")
+
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+
+	// Only show profile header when multiple profiles exist.
+	profiles, currentProfile, _ := config.ListProfiles()
+	if len(profiles) > 1 {
+		fmt.Fprintf(w, "Profile: %s\n\n", ui.TitleStyle.Render(profile))
+	}
+
 	fmt.Fprintln(w, "KEY\tVALUE\tSOURCE")
-	for key, store := range knownConfigKeys {
+
+	keys := make([]string, 0, len(knownConfigKeys))
+	for k := range knownConfigKeys {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		store := knownConfigKeys[key]
 		value := viper.GetString(key)
 		source := store
 		if value == "" {
@@ -124,5 +154,31 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\n", key, value, source)
 	}
+
+	// Show available profiles only when multiple exist.
+	if len(profiles) > 1 {
+		sort.Strings(profiles)
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "Profiles:")
+		for _, p := range profiles {
+			marker := "  "
+			if p == currentProfile {
+				marker = "* "
+			}
+			fmt.Fprintf(w, "  %s%s\n", marker, p)
+		}
+	}
+
 	return w.Flush()
+}
+
+func runConfigUse(cmd *cobra.Command, args []string) error {
+	profile := args[0]
+
+	if err := config.SetCurrentProfile(profile); err != nil {
+		return fmt.Errorf("setting profile: %w", err)
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), ui.SuccessStyle.Render(fmt.Sprintf("Switched to profile %q", profile)))
+	return nil
 }
