@@ -23,6 +23,7 @@ var emailListCmd = &cobra.Command{
 	Example: `  fm email list
   fm email list -L 10 -p 2
   fm email list --direction inbound
+  fm email list --unread
   fm email list --json`,
 	RunE: runEmailList,
 }
@@ -89,6 +90,22 @@ var emailTrashDeleteCmd = &cobra.Command{
 	RunE:  runEmailTrashDelete,
 }
 
+var emailReadCmd = &cobra.Command{
+	Use:     "read <id>",
+	Short:   "Mark an email as read",
+	Example: `  fm email read <id>`,
+	Args:    cobra.ExactArgs(1),
+	RunE:    runEmailRead,
+}
+
+var emailUnreadCmd = &cobra.Command{
+	Use:     "unread <id>",
+	Short:   "Mark an email as unread",
+	Example: `  fm email unread <id>`,
+	Args:    cobra.ExactArgs(1),
+	RunE:    runEmailUnread,
+}
+
 var emailRestoreCmd = &cobra.Command{
 	Use:   "restore <id>",
 	Short: "Restore an email from trash",
@@ -100,6 +117,9 @@ func init() {
 	emailListCmd.Flags().IntP("limit", "L", 30, "maximum number of emails to list")
 	emailListCmd.Flags().IntP("page", "p", 1, "page number")
 	emailListCmd.Flags().StringP("direction", "d", "", "filter by direction (inbound, outbound)")
+	emailListCmd.Flags().Bool("read", false, "show only read emails")
+	emailListCmd.Flags().Bool("unread", false, "show only unread emails")
+	emailListCmd.MarkFlagsMutuallyExclusive("read", "unread")
 
 	emailSendCmd.Flags().StringP("mailbox", "m", "", "mailbox ID")
 	emailSendCmd.Flags().StringSliceP("to", "t", nil, "recipient address (repeatable, comma-separated)")
@@ -126,6 +146,8 @@ func init() {
 	emailCmd.AddCommand(emailViewCmd)
 	emailCmd.AddCommand(emailSendCmd)
 	emailCmd.AddCommand(emailDeleteCmd)
+	emailCmd.AddCommand(emailReadCmd)
+	emailCmd.AddCommand(emailUnreadCmd)
 	emailCmd.AddCommand(emailTrashCmd)
 	emailCmd.AddCommand(emailRestoreCmd)
 
@@ -142,7 +164,15 @@ func runEmailList(cmd *cobra.Command, args []string) error {
 	page, _ := cmd.Flags().GetInt("page")
 	direction, _ := cmd.Flags().GetString("direction")
 
-	list, err := client.ListEmails(cmd.Context(), page, limit, direction)
+	var isRead *bool
+	if r, _ := cmd.Flags().GetBool("read"); r {
+		isRead = &r
+	} else if u, _ := cmd.Flags().GetBool("unread"); u {
+		f := false
+		isRead = &f
+	}
+
+	list, err := client.ListEmails(cmd.Context(), page, limit, direction, isRead)
 	if err != nil {
 		return fmt.Errorf("listing emails: %w", err)
 	}
@@ -167,7 +197,11 @@ func printEmailListText(cmd *cobra.Command, list *api.EmailListResponse) error {
 		if e.SentAt != nil {
 			ts = *e.SentAt
 		}
-		fmt.Fprintf(w, "  %s  %s  %s  %s  %s\n", e.ID, ts.Format("2006-01-02 15:04"), e.Direction, e.From, truncate(e.Subject, 40))
+		readMark := "unread"
+		if e.ReadAt != nil {
+			readMark = "read"
+		}
+		fmt.Fprintf(w, "  %s  %s  %-7s  %-8s  %s  %s\n", e.ID, ts.Format("2006-01-02 15:04"), readMark, e.Direction, e.From, truncate(e.Subject, 40))
 	}
 	return nil
 }
@@ -202,6 +236,11 @@ func printEmailViewText(cmd *cobra.Command, email *api.EmailDetail) error {
 	}
 	fmt.Fprintf(w, "Subject:   %s\n", email.Subject)
 	fmt.Fprintf(w, "Status:    %s\n", email.Status)
+	if email.ReadAt != nil {
+		fmt.Fprintf(w, "Read:      %s\n", email.ReadAt.Format("2006-01-02 15:04:05"))
+	} else {
+		fmt.Fprintf(w, "Read:      unread\n")
+	}
 	if email.SentAt != nil {
 		fmt.Fprintf(w, "Sent:      %s\n", email.SentAt.Format("2006-01-02 15:04:05"))
 	}
@@ -256,6 +295,46 @@ func runEmailSend(cmd *cobra.Command, args []string) error {
 		return enc.Encode(email)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Email sent: %s\n", email.ID)
+	return nil
+}
+
+func runEmailRead(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	email, err := client.MarkEmailAsRead(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("marking email as read: %w", err)
+	}
+
+	if viper.GetBool("json") {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(email)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Marked as read: %s\n", email.ID)
+	return nil
+}
+
+func runEmailUnread(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	email, err := client.MarkEmailAsUnread(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("marking email as unread: %w", err)
+	}
+
+	if viper.GetBool("json") {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(email)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Marked as unread: %s\n", email.ID)
 	return nil
 }
 

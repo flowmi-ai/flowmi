@@ -131,6 +131,75 @@ func TestDeleteCredentialKeys_RemovesEmptyProfile(t *testing.T) {
 	}
 }
 
+func TestDeleteCredentialKeys_NonExistentProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	// Deleting from a profile that doesn't exist should be a no-op.
+	if err := DeleteCredentialKeys("staging", "api_key"); err != nil {
+		t.Fatalf("DeleteCredentialKeys on missing profile: %v", err)
+	}
+}
+
+func TestDeleteCredentialKeys_NonExistentKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	if err := SaveCredentials("prod", map[string]string{"api_key": "k"}); err != nil {
+		t.Fatalf("SaveCredentials: %v", err)
+	}
+
+	// Deleting keys that don't exist should leave the profile untouched.
+	if err := DeleteCredentialKeys("prod", "no_such_key"); err != nil {
+		t.Fatalf("DeleteCredentialKeys: %v", err)
+	}
+
+	creds, err := LoadCredentials("prod")
+	if err != nil {
+		t.Fatalf("LoadCredentials: %v", err)
+	}
+	if got := creds["api_key"]; got != "k" {
+		t.Errorf("api_key = %q, want %q", got, "k")
+	}
+}
+
+func TestDeleteCredentialKeys_InvalidProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	if err := DeleteCredentialKeys("", "api_key"); err == nil {
+		t.Fatal("expected error for empty profile name, got nil")
+	}
+	if err := DeleteCredentialKeys("current_profile", "api_key"); err == nil {
+		t.Fatal("expected error for reserved profile name, got nil")
+	}
+}
+
+func TestDeleteCredentialKeys_IsolatesProfiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	if err := SaveCredentials("prod", map[string]string{"api_key": "prod_key"}); err != nil {
+		t.Fatalf("save prod: %v", err)
+	}
+	if err := SaveCredentials("local", map[string]string{"api_key": "local_key"}); err != nil {
+		t.Fatalf("save local: %v", err)
+	}
+
+	// Delete from prod should not affect local.
+	if err := DeleteCredentialKeys("prod", "api_key"); err != nil {
+		t.Fatalf("DeleteCredentialKeys: %v", err)
+	}
+
+	local, err := LoadCredentials("local")
+	if err != nil {
+		t.Fatalf("LoadCredentials local: %v", err)
+	}
+	if got := local["api_key"]; got != "local_key" {
+		t.Errorf("local api_key = %q, want %q (should be unaffected)", got, "local_key")
+	}
+}
+
 func TestCredentials_MultipleProfiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
