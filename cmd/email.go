@@ -347,7 +347,7 @@ func runEmailTrash(cmd *cobra.Command, args []string) error {
 	limit, _ := cmd.Flags().GetInt("limit")
 	direction, _ := cmd.Flags().GetString("direction")
 
-	list, err := client.ListTrashedEmails(cmd.Context(), 1, limit, direction, nil)
+	list, err := client.ListTrashedEmails(cmd.Context(), 1, limit, direction)
 	if err != nil {
 		return fmt.Errorf("listing trashed emails: %w", err)
 	}

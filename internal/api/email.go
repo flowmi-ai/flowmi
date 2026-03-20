@@ -162,13 +162,10 @@ func (c *Client) DeleteEmail(ctx context.Context, id string) error {
 	return err
 }
 
-func (c *Client) ListTrashedEmails(ctx context.Context, page, pageSize int, direction string, isRead *bool) (*EmailListResponse, error) {
+func (c *Client) ListTrashedEmails(ctx context.Context, page, pageSize int, direction string) (*EmailListResponse, error) {
 	path := fmt.Sprintf("/api/v1/email/trash?page=%d&pageSize=%d", page, pageSize)
 	if direction != "" {
 		path += "&direction=" + url.QueryEscape(direction)
-	}
-	if isRead != nil {
-		path += fmt.Sprintf("&isRead=%t", *isRead)
 	}
 	resp, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
