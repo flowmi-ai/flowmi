@@ -13,8 +13,8 @@ const DefaultProfile = "prod"
 
 // ProfileConfig represents the full config.toml with profile sections.
 //
-//	current_profile = "production"
-//	[production]
+//	current_profile = "prod"
+//	[prod]
 //	api_server_url = "https://api.flowmi.ai"
 //	auth_server_url = "https://flowmi.ai"
 //	[local]
@@ -201,7 +201,7 @@ func loadConfigFile(path string) (*ProfileConfig, error) {
 			}
 		}
 	} else {
-		// Legacy flat format: migrate all keys into the "production" profile.
+		// Legacy flat format: migrate all keys into the default profile.
 		flat := make(map[string]string)
 		for k, v := range raw {
 			if k == "current_profile" {
@@ -224,7 +224,7 @@ func writeConfigFile(path string, pc *ProfileConfig) error {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	// Build ordered output: current_profile first, then profile sections.
+	// Build output: current_profile + profile sections.
 	ordered := make(map[string]any, len(pc.Profiles)+1)
 	if pc.CurrentProfile != "" {
 		ordered["current_profile"] = pc.CurrentProfile

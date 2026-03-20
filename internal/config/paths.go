@@ -14,6 +14,11 @@ func SetConfigFile(path string) {
 	configFileOverride = path
 }
 
+// ResetConfigFile clears the config file override. Used in tests.
+func ResetConfigFile() {
+	configFileOverride = ""
+}
+
 // ConfigDir returns the flowmi configuration directory.
 // It checks $XDG_CONFIG_HOME/flowmi first, falling back to a platform-specific
 // default: ~/.config/flowmi on Unix, %AppData%\flowmi on Windows.

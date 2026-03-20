@@ -65,7 +65,7 @@ var configUseCmd = &cobra.Command{
 	Short:  "Switch the active profile",
 	Hidden: true,
 	Example: `  flowmi config use local
-  flowmi config use production`,
+  flowmi config use prod`,
 	Args: cobra.ExactArgs(1),
 	RunE: runConfigUse,
 }
@@ -129,7 +129,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
 
 	// Only show profile header when multiple profiles exist.
-	profiles, currentProfile, _ := config.ListProfiles()
+	profiles, _, _ := config.ListProfiles()
 	if len(profiles) > 1 {
 		fmt.Fprintf(w, "Profile: %s\n\n", ui.TitleStyle.Render(profile))
 	}
@@ -162,7 +162,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(w, "Profiles:")
 		for _, p := range profiles {
 			marker := "  "
-			if p == currentProfile {
+			if p == profile {
 				marker = "* "
 			}
 			fmt.Fprintf(w, "  %s%s\n", marker, p)
@@ -174,6 +174,14 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 
 func runConfigUse(cmd *cobra.Command, args []string) error {
 	profile := args[0]
+
+	// Warn if the profile has no config or credentials.
+	cfg, _ := config.LoadConfigProfile(profile)
+	creds, _ := config.LoadCredentials(profile)
+	if len(cfg) == 0 && len(creds) == 0 {
+		fmt.Fprintln(cmd.ErrOrStderr(), ui.WarningStyle.Render(
+			fmt.Sprintf("Warning: profile %q has no config or credentials yet", profile)))
+	}
 
 	if err := config.SetCurrentProfile(profile); err != nil {
 		return fmt.Errorf("setting profile: %w", err)

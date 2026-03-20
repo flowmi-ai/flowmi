@@ -24,6 +24,10 @@ var (
 	ErrorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#EF4444"))
 
+	// Warning style for warning messages.
+	WarningStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#F59E0B"))
+
 	// Info style for informational text.
 	InfoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#3B82F6"))
@@ -37,6 +41,7 @@ func init() {
 		SubtleStyle = plain
 		SuccessStyle = plain
 		ErrorStyle = plain
+		WarningStyle = plain
 		InfoStyle = plain
 	}
 }

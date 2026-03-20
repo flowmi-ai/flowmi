@@ -76,7 +76,7 @@ func init() {
 }
 
 // activeProfile returns the resolved profile name.
-// Priority: --profile flag → FLOWMI_PROFILE env → current_profile in config.toml → "production".
+// Priority: --profile flag → FLOWMI_PROFILE env → current_profile in config.toml → "prod".
 func activeProfile() string {
 	if profileFlag != "" {
 		return profileFlag
