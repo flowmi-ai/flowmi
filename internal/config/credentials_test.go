@@ -197,6 +197,25 @@ func TestMixedFormatCredentials(t *testing.T) {
 	}
 }
 
+func TestMixedFormatCredentials_ConflictingKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	// Stray top-level key conflicts with a key inside [prod] — section value must win.
+	dir := filepath.Join(tmpDir, "flowmi")
+	os.MkdirAll(dir, 0o755)
+	mixed := []byte("access_token = 'stale_token'\n\n[prod]\naccess_token = 'real_token'\n")
+	os.WriteFile(filepath.Join(dir, "credentials.toml"), mixed, 0o600)
+
+	creds, err := LoadCredentials("prod")
+	if err != nil {
+		t.Fatalf("LoadCredentials: %v", err)
+	}
+	if got := creds["access_token"]; got != "real_token" {
+		t.Errorf("access_token = %q, want %q (section value must take precedence over stray scalar)", got, "real_token")
+	}
+}
+
 func TestLegacyFlatConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)

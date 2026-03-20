@@ -42,7 +42,17 @@ func SaveCredentials(profile string, creds map[string]string) error {
 	if err != nil {
 		return err
 	}
-	all[profile] = creds
+
+	// Merge into existing profile data (loaded under lock) so concurrent
+	// callers don't silently discard each other's writes.
+	existing := all[profile]
+	if existing == nil {
+		existing = make(map[string]string, len(creds))
+	}
+	for k, v := range creds {
+		existing[k] = v
+	}
+	all[profile] = existing
 
 	return writeProfiledFile(path, all, 0o600)
 }
@@ -84,7 +94,16 @@ func SaveConfigProfile(profile string, cfg map[string]string) error {
 	if err != nil {
 		return err
 	}
-	pc.Profiles[profile] = cfg
+
+	// Merge into existing profile data (loaded under lock).
+	existing := pc.Profiles[profile]
+	if existing == nil {
+		existing = make(map[string]string, len(cfg))
+	}
+	for k, v := range cfg {
+		existing[k] = v
+	}
+	pc.Profiles[profile] = existing
 
 	return writeConfigFile(path, pc)
 }
@@ -226,7 +245,8 @@ func parseProfiledTOML(data []byte) (profiles map[string]map[string]string, curr
 				profiles[k] = flat
 			}
 		}
-		// Preserve top-level scalar keys (partial migration) into DefaultProfile.
+		// Preserve top-level scalar keys (partial migration) into DefaultProfile,
+		// but never overwrite keys that already exist in the [prod] section.
 		for k, v := range raw {
 			if k == "current_profile" {
 				continue
@@ -235,7 +255,9 @@ func parseProfiledTOML(data []byte) (profiles map[string]map[string]string, curr
 				if profiles[DefaultProfile] == nil {
 					profiles[DefaultProfile] = make(map[string]string)
 				}
-				profiles[DefaultProfile][k] = fmt.Sprintf("%v", v)
+				if _, exists := profiles[DefaultProfile][k]; !exists {
+					profiles[DefaultProfile][k] = fmt.Sprintf("%v", v)
+				}
 			}
 		}
 	} else {
@@ -341,6 +363,11 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		f.Close()
 		os.Remove(tmp)
 		return fmt.Errorf("writing temporary file: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return fmt.Errorf("syncing temporary file: %w", err)
 	}
 	if err := f.Chmod(perm); err != nil {
 		f.Close()
