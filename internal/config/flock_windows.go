@@ -33,6 +33,8 @@ func acquireFileLock(path string) (*fileLock, error) {
 	}
 
 	ol := new(syscall.Overlapped)
+	// LOCKFILE_EXCLUSIVE_LOCK without LOCKFILE_FAIL_IMMEDIATELY — blocks until
+	// the lock is available, matching the Unix LOCK_EX (blocking) behavior.
 	const lockfileExclusiveLock = 0x00000002
 	r1, _, e1 := lockFileExProc.Call(
 		f.Fd(),

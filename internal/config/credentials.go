@@ -57,6 +57,40 @@ func SaveCredentials(profile string, creds map[string]string) error {
 	return writeProfiledFile(path, all, 0o600)
 }
 
+// DeleteCredentialKeys removes the given keys from a profile in credentials.toml.
+func DeleteCredentialKeys(profile string, keys ...string) error {
+	path, err := CredentialsFilePath()
+	if err != nil {
+		return fmt.Errorf("resolving credentials path: %w", err)
+	}
+
+	lock, err := acquireFileLock(path)
+	if err != nil {
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer lock.Release()
+
+	all, err := loadProfiledFile(path)
+	if err != nil {
+		return err
+	}
+
+	section, ok := all[profile]
+	if !ok {
+		return nil
+	}
+	for _, k := range keys {
+		delete(section, k)
+	}
+	if len(section) == 0 {
+		delete(all, profile)
+	} else {
+		all[profile] = section
+	}
+
+	return writeProfiledFile(path, all, 0o600)
+}
+
 // LoadCredentials reads key-value pairs for the given profile from credentials.toml.
 // Returns an empty map (not an error) if the file or profile does not exist.
 func LoadCredentials(profile string) (map[string]string, error) {
@@ -347,6 +381,10 @@ func writeProfiledFile(path string, profiles map[string]map[string]string, perm 
 
 // atomicWriteFile writes data to a unique temporary file and renames it into place,
 // preventing both partial writes and collisions between concurrent processes.
+//
+// On Windows, os.Rename fails if the destination is held open by another process
+// (e.g. an external editor). The caller's file lock guards against flowmi's own
+// concurrent writes but cannot prevent external programs from holding the file.
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

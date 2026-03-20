@@ -20,7 +20,9 @@ func SetConfigFile(path string) {
 	configFileOverride = path
 }
 
-// ResetConfigFile clears the config file override. Used in tests.
+// ResetConfigFile clears the config file override.
+// Tests that call SetConfigFile should defer ResetConfigFile via t.Cleanup
+// to avoid leaking state into other tests.
 func ResetConfigFile() {
 	configMu.Lock()
 	defer configMu.Unlock()

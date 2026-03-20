@@ -80,6 +80,57 @@ func TestSaveCredentials_OverwriteExisting(t *testing.T) {
 	}
 }
 
+func TestDeleteCredentialKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	if err := SaveCredentials("prod", map[string]string{
+		"access_token":  "tok_abc",
+		"refresh_token": "ref_xyz",
+		"api_key":       "key_123",
+	}); err != nil {
+		t.Fatalf("SaveCredentials: %v", err)
+	}
+
+	if err := DeleteCredentialKeys("prod", "access_token", "refresh_token"); err != nil {
+		t.Fatalf("DeleteCredentialKeys: %v", err)
+	}
+
+	creds, err := LoadCredentials("prod")
+	if err != nil {
+		t.Fatalf("LoadCredentials: %v", err)
+	}
+	if _, ok := creds["access_token"]; ok {
+		t.Error("access_token should have been deleted")
+	}
+	if _, ok := creds["refresh_token"]; ok {
+		t.Error("refresh_token should have been deleted")
+	}
+	if got := creds["api_key"]; got != "key_123" {
+		t.Errorf("api_key = %q, want %q (should be preserved)", got, "key_123")
+	}
+}
+
+func TestDeleteCredentialKeys_RemovesEmptyProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	if err := SaveCredentials("staging", map[string]string{"api_key": "k"}); err != nil {
+		t.Fatalf("SaveCredentials: %v", err)
+	}
+	if err := DeleteCredentialKeys("staging", "api_key"); err != nil {
+		t.Fatalf("DeleteCredentialKeys: %v", err)
+	}
+
+	creds, err := LoadCredentials("staging")
+	if err != nil {
+		t.Fatalf("LoadCredentials: %v", err)
+	}
+	if len(creds) != 0 {
+		t.Errorf("expected empty map after deleting all keys, got %v", creds)
+	}
+}
+
 func TestCredentials_MultipleProfiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
