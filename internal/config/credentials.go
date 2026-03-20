@@ -163,7 +163,7 @@ func loadConfigFile(path string) (*ProfileConfig, error) {
 		if os.IsNotExist(err) {
 			return &ProfileConfig{Profiles: map[string]map[string]string{}}, nil
 		}
-		return nil, fmt.Errorf("reading config file: %w", err)
+		return nil, fmt.Errorf("reading config file %s: %w", path, err)
 	}
 
 	// Try the new profiled format first: top-level current_profile + sections.
@@ -200,6 +200,18 @@ func loadConfigFile(path string) (*ProfileConfig, error) {
 				pc.Profiles[k] = flat
 			}
 		}
+		// Preserve top-level scalar keys (partial migration) into DefaultProfile.
+		for k, v := range raw {
+			if k == "current_profile" {
+				continue
+			}
+			if _, isMap := v.(map[string]any); !isMap {
+				if pc.Profiles[DefaultProfile] == nil {
+					pc.Profiles[DefaultProfile] = make(map[string]string)
+				}
+				pc.Profiles[DefaultProfile][k] = fmt.Sprintf("%v", v)
+			}
+		}
 	} else {
 		// Legacy flat format: migrate all keys into the default profile.
 		flat := make(map[string]string)
@@ -219,11 +231,6 @@ func loadConfigFile(path string) (*ProfileConfig, error) {
 
 // writeConfigFile writes a ProfileConfig to config.toml.
 func writeConfigFile(path string, pc *ProfileConfig) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
-	}
-
 	// Build output: current_profile + profile sections.
 	ordered := make(map[string]any, len(pc.Profiles)+1)
 	if pc.CurrentProfile != "" {
@@ -238,7 +245,7 @@ func writeConfigFile(path string, pc *ProfileConfig) error {
 		return fmt.Errorf("encoding config: %w", err)
 	}
 
-	return os.WriteFile(path, buf.Bytes(), 0o644)
+	return atomicWriteFile(path, buf.Bytes(), 0o644)
 }
 
 // loadProfiledFile reads a TOML file with profile sections (e.g., credentials.toml).
@@ -278,6 +285,15 @@ func loadProfiledFile(path string) (map[string]map[string]string, error) {
 				result[k] = flat
 			}
 		}
+		// Preserve top-level scalar keys (partial migration) into DefaultProfile.
+		for k, v := range raw {
+			if _, isMap := v.(map[string]any); !isMap {
+				if result[DefaultProfile] == nil {
+					result[DefaultProfile] = make(map[string]string)
+				}
+				result[DefaultProfile][k] = fmt.Sprintf("%v", v)
+			}
+		}
 	} else {
 		// Legacy flat format → migrate into DefaultProfile.
 		flat := make(map[string]string, len(raw))
@@ -294,15 +310,30 @@ func loadProfiledFile(path string) (map[string]map[string]string, error) {
 
 // writeProfiledFile writes profile sections to a TOML file.
 func writeProfiledFile(path string, profiles map[string]map[string]string, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-
 	var buf bytes.Buffer
 	if err := toml.NewEncoder(&buf).Encode(profiles); err != nil {
 		return fmt.Errorf("encoding file: %w", err)
 	}
 
-	return os.WriteFile(path, buf.Bytes(), perm)
+	return atomicWriteFile(path, buf.Bytes(), perm)
+}
+
+// atomicWriteFile writes data to a temporary file and renames it into place,
+// preventing partial writes from corrupting the target file.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating directory: %w", err)
+	}
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		return fmt.Errorf("writing temporary file: %w", err)
+	}
+
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("renaming temporary file: %w", err)
+	}
+	return nil
 }

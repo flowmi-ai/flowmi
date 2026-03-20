@@ -61,9 +61,8 @@ var configListCmd = &cobra.Command{
 }
 
 var configUseCmd = &cobra.Command{
-	Use:    "use <profile>",
-	Short:  "Switch the active profile",
-	Hidden: true,
+	Use:   "use <profile>",
+	Short: "Switch the active profile",
 	Example: `  flowmi config use local
   flowmi config use prod`,
 	Args: cobra.ExactArgs(1),
@@ -108,7 +107,11 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), ui.SuccessStyle.Render(fmt.Sprintf(`Set "%s" to "%s" (profile: %s)`, key, value, profile)))
+	msg := fmt.Sprintf(`Set "%s" to "%s"`, key, value)
+	if profiles, _, _ := config.ListProfiles(); len(profiles) > 1 {
+		msg = fmt.Sprintf(`Set "%s" to "%s" (profile: %s)`, key, value, profile)
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), ui.SuccessStyle.Render(msg))
 	return nil
 }
 

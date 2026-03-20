@@ -3,7 +3,11 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sync"
 )
+
+// configMu guards configFileOverride against concurrent access (e.g. parallel tests).
+var configMu sync.RWMutex
 
 // configFileOverride, when non-empty, replaces the default config.toml path.
 // Set via SetConfigFile before any config reads.
@@ -11,11 +15,15 @@ var configFileOverride string
 
 // SetConfigFile overrides the default config.toml path (e.g. from --config flag).
 func SetConfigFile(path string) {
+	configMu.Lock()
+	defer configMu.Unlock()
 	configFileOverride = path
 }
 
 // ResetConfigFile clears the config file override. Used in tests.
 func ResetConfigFile() {
+	configMu.Lock()
+	defer configMu.Unlock()
 	configFileOverride = ""
 }
 
@@ -37,8 +45,11 @@ func ConfigDir() (string, error) {
 // ConfigFilePath returns the full path to config.toml.
 // If SetConfigFile was called, returns that path instead.
 func ConfigFilePath() (string, error) {
-	if configFileOverride != "" {
-		return configFileOverride, nil
+	configMu.RLock()
+	override := configFileOverride
+	configMu.RUnlock()
+	if override != "" {
+		return override, nil
 	}
 	dir, err := ConfigDir()
 	if err != nil {

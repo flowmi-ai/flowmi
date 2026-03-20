@@ -174,6 +174,29 @@ func TestCurrentProfile(t *testing.T) {
 	}
 }
 
+func TestMixedFormatCredentials(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	// Write a mixed-format file: top-level scalars alongside a profile section.
+	dir := filepath.Join(tmpDir, "flowmi")
+	os.MkdirAll(dir, 0o755)
+	mixed := []byte("stray_key = 'stray_value'\n\n[prod]\naccess_token = 'tok_prod'\n")
+	os.WriteFile(filepath.Join(dir, "credentials.toml"), mixed, 0o600)
+
+	// Top-level scalar should be preserved in the default profile, not dropped.
+	creds, err := LoadCredentials("prod")
+	if err != nil {
+		t.Fatalf("LoadCredentials: %v", err)
+	}
+	if got := creds["access_token"]; got != "tok_prod" {
+		t.Errorf("access_token = %q, want %q", got, "tok_prod")
+	}
+	if got := creds["stray_key"]; got != "stray_value" {
+		t.Errorf("stray_key = %q, want %q (should be preserved, not dropped)", got, "stray_value")
+	}
+}
+
 func TestLegacyFlatConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
