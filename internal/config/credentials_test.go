@@ -267,6 +267,39 @@ func TestMixedFormatCredentials_ConflictingKeys(t *testing.T) {
 	}
 }
 
+func TestValidateProfileName(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{"prod", false},
+		{"local", false},
+		{"my-staging", false},
+		{"dev_2", false},
+		{"", true},
+		{"current_profile", true},
+		{"UPPER", true},
+		{"has spaces", true},
+		{"has.dot", true},
+		{"-leading-dash", true},
+	}
+	for _, tt := range tests {
+		err := ValidateProfileName(tt.name)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ValidateProfileName(%q) error = %v, wantErr %v", tt.name, err, tt.wantErr)
+		}
+	}
+}
+
+func TestSetCurrentProfile_RejectsReservedName(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	if err := SetCurrentProfile("current_profile"); err == nil {
+		t.Fatal("expected error for reserved profile name, got nil")
+	}
+}
+
 func TestLegacyFlatConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)

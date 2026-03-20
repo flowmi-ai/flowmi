@@ -5,11 +5,35 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
 const DefaultProfile = "prod"
+
+// validProfileName matches lowercase alphanumeric names with optional hyphens/underscores.
+var validProfileName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+// reservedProfileNames are top-level TOML keys that must not be used as profile names.
+var reservedProfileNames = map[string]struct{}{
+	"current_profile": {},
+}
+
+// ValidateProfileName returns an error if the profile name is empty, reserved,
+// or contains characters that would conflict with TOML structure.
+func ValidateProfileName(name string) error {
+	if name == "" {
+		return fmt.Errorf("profile name must not be empty")
+	}
+	if _, ok := reservedProfileNames[name]; ok {
+		return fmt.Errorf("profile name %q is reserved", name)
+	}
+	if !validProfileName.MatchString(name) {
+		return fmt.Errorf("profile name %q is invalid: use lowercase letters, digits, hyphens, or underscores", name)
+	}
+	return nil
+}
 
 // ProfileConfig represents the full config.toml with profile sections.
 //
@@ -27,6 +51,10 @@ type ProfileConfig struct {
 
 // SaveCredentials writes key-value pairs to the given profile section in credentials.toml.
 func SaveCredentials(profile string, creds map[string]string) error {
+	if err := ValidateProfileName(profile); err != nil {
+		return err
+	}
+
 	path, err := CredentialsFilePath()
 	if err != nil {
 		return fmt.Errorf("resolving credentials path: %w", err)
@@ -59,6 +87,10 @@ func SaveCredentials(profile string, creds map[string]string) error {
 
 // DeleteCredentialKeys removes the given keys from a profile in credentials.toml.
 func DeleteCredentialKeys(profile string, keys ...string) error {
+	if err := ValidateProfileName(profile); err != nil {
+		return err
+	}
+
 	path, err := CredentialsFilePath()
 	if err != nil {
 		return fmt.Errorf("resolving credentials path: %w", err)
@@ -113,6 +145,10 @@ func LoadCredentials(profile string) (map[string]string, error) {
 // SaveConfigProfile writes key-value pairs to the given profile section in config.toml,
 // preserving the current_profile top-level key and other profile sections.
 func SaveConfigProfile(profile string, cfg map[string]string) error {
+	if err := ValidateProfileName(profile); err != nil {
+		return err
+	}
+
 	path, err := ConfigFilePath()
 	if err != nil {
 		return fmt.Errorf("resolving config path: %w", err)
@@ -181,6 +217,10 @@ func CurrentProfile() (string, error) {
 
 // SetCurrentProfile writes the current_profile to config.toml.
 func SetCurrentProfile(profile string) error {
+	if err := ValidateProfileName(profile); err != nil {
+		return err
+	}
+
 	path, err := ConfigFilePath()
 	if err != nil {
 		return fmt.Errorf("resolving config path: %w", err)
