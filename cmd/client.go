@@ -54,7 +54,8 @@ func newAPIClient() (*api.Client, error) {
 			}
 
 			// Persist the new tokens.
-			creds, _ := config.LoadCredentials()
+			profile := viper.GetString("profile")
+			creds, _ := config.LoadCredentials(profile)
 			if creds == nil {
 				creds = map[string]string{}
 			}
@@ -62,7 +63,7 @@ func newAPIClient() (*api.Client, error) {
 			if tokens.RefreshToken != "" {
 				creds["refresh_token"] = tokens.RefreshToken
 			}
-			if err := config.SaveCredentials(creds); err != nil {
+			if err := config.SaveCredentials(profile, creds); err != nil {
 				return "", fmt.Errorf("saving refreshed credentials: %w", err)
 			}
 

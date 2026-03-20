@@ -179,12 +179,13 @@ func tokenLogin(cmd *cobra.Command) error {
 }
 
 func saveAPIKey(apiKey string) error {
-	creds, err := config.LoadCredentials()
+	profile := viper.GetString("profile")
+	creds, err := config.LoadCredentials(profile)
 	if err != nil {
 		return fmt.Errorf("loading credentials: %w", err)
 	}
 	creds["api_key"] = apiKey
-	if err := config.SaveCredentials(creds); err != nil {
+	if err := config.SaveCredentials(profile, creds); err != nil {
 		return fmt.Errorf("saving API key: %w", err)
 	}
 	viper.Set("api_key", apiKey)
@@ -192,7 +193,8 @@ func saveAPIKey(apiKey string) error {
 }
 
 func saveTokens(token *auth.TokenResponse) error {
-	creds, err := config.LoadCredentials()
+	profile := viper.GetString("profile")
+	creds, err := config.LoadCredentials(profile)
 	if err != nil {
 		return err
 	}
@@ -200,5 +202,5 @@ func saveTokens(token *auth.TokenResponse) error {
 	creds["access_token"] = token.AccessToken
 	creds["refresh_token"] = token.RefreshToken
 
-	return config.SaveCredentials(creds)
+	return config.SaveCredentials(profile, creds)
 }

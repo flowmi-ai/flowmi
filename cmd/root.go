@@ -17,11 +17,13 @@ import (
 )
 
 var cfgFile string
+var profileFlag string
 var defaultHelpFunc func(*cobra.Command, []string)
 var globalHelpFlagNames = map[string]struct{}{
-	"config": {},
-	"debug":  {},
-	"json":   {},
+	"config":  {},
+	"debug":   {},
+	"json":    {},
+	"profile": {},
 }
 
 const (
@@ -38,8 +40,9 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	// Support "fm" as alias: adapt Use field based on binary name
-	bin := filepath.Base(os.Args[0])
+	// Support "fm" as alias: adapt Use field based on binary name.
+	// Strip extension so "fm.exe" matches on Windows.
+	bin := strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
 	if bin == "fm" {
 		rootCmd.Use = "fm"
 	}
@@ -53,7 +56,9 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ~/.config/flowmi/config.toml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $XDG_CONFIG_HOME/flowmi/config.toml)")
+	rootCmd.PersistentFlags().StringVar(&profileFlag, "profile", "", "config profile to use (default: current_profile from config.toml)")
+	rootCmd.PersistentFlags().MarkHidden("profile")
 	rootCmd.PersistentFlags().Bool("json", false, "output in JSON format")
 	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging (HTTP requests/responses)")
 	viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
@@ -70,29 +75,43 @@ func init() {
 	rootCmd.SetHelpFunc(renderHelp)
 }
 
+// activeProfile returns the resolved profile name.
+// Priority: --profile flag → FLOWMI_PROFILE env → current_profile in config.toml → "prod".
+func activeProfile() string {
+	if profileFlag != "" {
+		return profileFlag
+	}
+	if env := os.Getenv("FLOWMI_PROFILE"); env != "" {
+		return env
+	}
+	p, _ := config.CurrentProfile()
+	return p
+}
+
 func initConfig() {
 	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		configDir, err := config.ConfigDir()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		viper.AddConfigPath(configDir)
-		viper.SetConfigName("config")
-		viper.SetConfigType("toml")
+		config.SetConfigFile(cfgFile)
 	}
 
 	viper.SetDefault("auth_server_url", defaultAuthServerURL)
 	viper.SetDefault("api_server_url", defaultAPIServerURL)
 	viper.SetEnvPrefix("FLOWMI")
 	viper.AutomaticEnv()
-	viper.ReadInConfig() // silently ignore if config file not found
 
-	// Inject credentials into viper so the rest of the app can use
-	// viper.GetString("access_token") etc. as before.
-	creds, err := config.LoadCredentials()
+	// Load profile-specific config values into viper.
+	profile := activeProfile()
+	viper.Set("profile", profile)
+
+	cfgValues, err := config.LoadConfigProfile(profile)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "warning: could not load config:", err)
+	}
+	for k, v := range cfgValues {
+		viper.SetDefault(k, v)
+	}
+
+	// Inject credentials into viper.
+	creds, err := config.LoadCredentials(profile)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "warning: could not load credentials:", err)
 		return

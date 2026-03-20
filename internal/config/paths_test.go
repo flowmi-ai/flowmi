@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -15,8 +16,14 @@ func TestConfigDir_Default(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	home, _ := os.UserHomeDir()
-	want := filepath.Join(home, ".config", "flowmi")
+	var want string
+	if runtime.GOOS == "windows" {
+		base, _ := os.UserConfigDir()
+		want = filepath.Join(base, "flowmi")
+	} else {
+		home, _ := os.UserHomeDir()
+		want = filepath.Join(home, ".config", "flowmi")
+	}
 	if dir != want {
 		t.Errorf("ConfigDir() = %q, want %q", dir, want)
 	}
