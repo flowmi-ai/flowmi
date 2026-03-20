@@ -31,6 +31,7 @@ type Email struct {
 	Subject     string        `json:"subject"`
 	Status      string        `json:"status"`
 	Attachments []*Attachment `json:"attachments"`
+	ReadAt      *time.Time    `json:"readAt,omitempty"`
 	SentAt      *time.Time    `json:"sentAt,omitempty"`
 	CreatedAt   time.Time     `json:"createdAt"`
 	DeletedAt   *time.Time    `json:"deletedAt,omitempty"`
@@ -97,10 +98,13 @@ func (c *Client) SendEmail(ctx context.Context, req *SendEmailRequest) (*EmailDe
 	return &email, nil
 }
 
-func (c *Client) ListEmails(ctx context.Context, page, pageSize int, direction string) (*EmailListResponse, error) {
+func (c *Client) ListEmails(ctx context.Context, page, pageSize int, direction string, isRead *bool) (*EmailListResponse, error) {
 	path := fmt.Sprintf("/api/v1/email?page=%d&pageSize=%d", page, pageSize)
 	if direction != "" {
 		path += "&direction=" + url.QueryEscape(direction)
+	}
+	if isRead != nil {
+		path += fmt.Sprintf("&isRead=%t", *isRead)
 	}
 	resp, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -127,15 +131,44 @@ func (c *Client) GetEmail(ctx context.Context, id string) (*EmailDetail, error) 
 	return &email, nil
 }
 
+func (c *Client) MarkEmailAsRead(ctx context.Context, id string) (*EmailDetail, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/email/"+id+"/mark-as-read", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var email EmailDetail
+	if err := json.Unmarshal(resp.Data, &email); err != nil {
+		return nil, fmt.Errorf("decoding email: %w", err)
+	}
+	return &email, nil
+}
+
+func (c *Client) MarkEmailAsUnread(ctx context.Context, id string) (*EmailDetail, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/email/"+id+"/mark-as-unread", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var email EmailDetail
+	if err := json.Unmarshal(resp.Data, &email); err != nil {
+		return nil, fmt.Errorf("decoding email: %w", err)
+	}
+	return &email, nil
+}
+
 func (c *Client) DeleteEmail(ctx context.Context, id string) error {
 	_, err := c.do(ctx, http.MethodDelete, "/api/v1/email/"+id, nil)
 	return err
 }
 
-func (c *Client) ListTrashedEmails(ctx context.Context, page, pageSize int, direction string) (*EmailListResponse, error) {
+func (c *Client) ListTrashedEmails(ctx context.Context, page, pageSize int, direction string, isRead *bool) (*EmailListResponse, error) {
 	path := fmt.Sprintf("/api/v1/email/trash?page=%d&pageSize=%d", page, pageSize)
 	if direction != "" {
 		path += "&direction=" + url.QueryEscape(direction)
+	}
+	if isRead != nil {
+		path += fmt.Sprintf("&isRead=%t", *isRead)
 	}
 	resp, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {

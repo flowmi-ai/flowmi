@@ -180,6 +180,12 @@ func tokenLogin(cmd *cobra.Command) error {
 
 func saveAPIKey(apiKey string) error {
 	profile := viper.GetString("profile")
+
+	// Clear OAuth2 tokens — API key auth replaces token-based auth.
+	if err := config.DeleteCredentialKeys(profile, "access_token", "refresh_token"); err != nil {
+		return fmt.Errorf("clearing old tokens: %w", err)
+	}
+
 	creds, err := config.LoadCredentials(profile)
 	if err != nil {
 		return fmt.Errorf("loading credentials: %w", err)
@@ -194,6 +200,12 @@ func saveAPIKey(apiKey string) error {
 
 func saveTokens(token *auth.TokenResponse) error {
 	profile := viper.GetString("profile")
+
+	// Clear API key — OAuth2 auth replaces key-based auth.
+	if err := config.DeleteCredentialKeys(profile, "api_key"); err != nil {
+		return fmt.Errorf("clearing old API key: %w", err)
+	}
+
 	creds, err := config.LoadCredentials(profile)
 	if err != nil {
 		return err
