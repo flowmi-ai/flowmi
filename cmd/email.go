@@ -226,7 +226,11 @@ func printEmailListText(cmd *cobra.Command, list *api.EmailListResponse) error {
 		if e.ReadAt != nil {
 			readMark = "read"
 		}
-		fmt.Fprintf(w, "  %s  %s  %-7s  %-8s  %s  %s\n", e.ID, ts.Format("2006-01-02 15:04"), readMark, e.Direction, e.From, truncate(e.Subject, 40))
+		preview := e.Subject
+		if e.Snippet != "" {
+			preview = e.Subject + " - " + e.Snippet
+		}
+		fmt.Fprintf(w, "  %s  %s  %-7s  %-8s  %s  %s\n", e.ID, ts.Format("2006-01-02 15:04"), readMark, e.Direction, e.From, truncate(preview, 60))
 	}
 	return nil
 }
@@ -400,7 +404,11 @@ func printEmailTrashText(cmd *cobra.Command, list *api.EmailListResponse) error 
 		if e.DeletedAt != nil {
 			deletedAt = e.DeletedAt.Format("2006-01-02 15:04")
 		}
-		fmt.Fprintf(w, "  %s  %s  %s  %s  %s\n", e.ID, deletedAt, e.Direction, e.From, truncate(e.Subject, 40))
+		preview := e.Subject
+		if e.Snippet != "" {
+			preview = e.Subject + " - " + e.Snippet
+		}
+		fmt.Fprintf(w, "  %s  %s  %s  %s  %s\n", e.ID, deletedAt, e.Direction, e.From, truncate(preview, 60))
 	}
 	return nil
 }
