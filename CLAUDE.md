@@ -46,6 +46,7 @@ fm email send|list|view|delete|trash|restore  fm email mailbox list|create|edit|
 fm image generate                              fm video generate
 fm search [web|images|news]
 fm scrape <url>
+fm ticket create
 fm config set|get|list                        fm update | fm version | fm options
 fm completion bash|zsh|fish|powershell
 ```
