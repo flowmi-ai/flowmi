@@ -29,6 +29,7 @@ type Email struct {
 	BCC         []string      `json:"bcc"`
 	ReplyTo     []string      `json:"replyTo"`
 	Subject     string        `json:"subject"`
+	Snippet     string        `json:"snippet,omitempty"`
 	Status      string        `json:"status"`
 	Attachments []*Attachment `json:"attachments"`
 	ReadAt      *time.Time    `json:"readAt,omitempty"`
