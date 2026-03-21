@@ -24,6 +24,7 @@ var emailListCmd = &cobra.Command{
   fm email list -L 10 -p 2
   fm email list --direction inbound
   fm email list --unread
+  fm email list --archived
   fm email list --json`,
 	RunE: runEmailList,
 }
@@ -106,6 +107,22 @@ var emailUnreadCmd = &cobra.Command{
 	RunE:    runEmailUnread,
 }
 
+var emailArchiveCmd = &cobra.Command{
+	Use:     "archive <id>",
+	Short:   "Archive an email",
+	Example: `  fm email archive <id>`,
+	Args:    cobra.ExactArgs(1),
+	RunE:    runEmailArchive,
+}
+
+var emailUnarchiveCmd = &cobra.Command{
+	Use:     "unarchive <id>",
+	Short:   "Unarchive an email",
+	Example: `  fm email unarchive <id>`,
+	Args:    cobra.ExactArgs(1),
+	RunE:    runEmailUnarchive,
+}
+
 var emailRestoreCmd = &cobra.Command{
 	Use:   "restore <id>",
 	Short: "Restore an email from trash",
@@ -119,6 +136,7 @@ func init() {
 	emailListCmd.Flags().StringP("direction", "d", "", "filter by direction (inbound, outbound)")
 	emailListCmd.Flags().Bool("read", false, "show only read emails")
 	emailListCmd.Flags().Bool("unread", false, "show only unread emails")
+	emailListCmd.Flags().Bool("archived", false, "show only archived emails")
 	emailListCmd.MarkFlagsMutuallyExclusive("read", "unread")
 
 	emailSendCmd.Flags().StringP("mailbox", "m", "", "mailbox ID")
@@ -148,6 +166,8 @@ func init() {
 	emailCmd.AddCommand(emailDeleteCmd)
 	emailCmd.AddCommand(emailReadCmd)
 	emailCmd.AddCommand(emailUnreadCmd)
+	emailCmd.AddCommand(emailArchiveCmd)
+	emailCmd.AddCommand(emailUnarchiveCmd)
 	emailCmd.AddCommand(emailTrashCmd)
 	emailCmd.AddCommand(emailRestoreCmd)
 
@@ -172,7 +192,12 @@ func runEmailList(cmd *cobra.Command, args []string) error {
 		isRead = &f
 	}
 
-	list, err := client.ListEmails(cmd.Context(), page, limit, direction, isRead)
+	var archived *bool
+	if a, _ := cmd.Flags().GetBool("archived"); a {
+		archived = &a
+	}
+
+	list, err := client.ListEmails(cmd.Context(), page, limit, direction, isRead, archived)
 	if err != nil {
 		return fmt.Errorf("listing emails: %w", err)
 	}
@@ -240,6 +265,9 @@ func printEmailViewText(cmd *cobra.Command, email *api.EmailDetail) error {
 		fmt.Fprintf(w, "Read:      %s\n", email.ReadAt.Format("2006-01-02 15:04:05"))
 	} else {
 		fmt.Fprintf(w, "Read:      unread\n")
+	}
+	if email.ArchivedAt != nil {
+		fmt.Fprintf(w, "Archived:  %s\n", email.ArchivedAt.Format("2006-01-02 15:04:05"))
 	}
 	if email.SentAt != nil {
 		fmt.Fprintf(w, "Sent:      %s\n", email.SentAt.Format("2006-01-02 15:04:05"))
@@ -432,6 +460,46 @@ func runEmailTrashDelete(cmd *cobra.Command, args []string) error {
 		return enc.Encode(map[string]string{"id": args[0], "status": "permanently deleted"})
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Email permanently deleted: %s\n", args[0])
+	return nil
+}
+
+func runEmailArchive(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	email, err := client.ArchiveEmail(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("archiving email: %w", err)
+	}
+
+	if viper.GetBool("json") {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(email)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Email archived: %s\n", email.ID)
+	return nil
+}
+
+func runEmailUnarchive(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+
+	email, err := client.UnarchiveEmail(cmd.Context(), args[0])
+	if err != nil {
+		return fmt.Errorf("unarchiving email: %w", err)
+	}
+
+	if viper.GetBool("json") {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(email)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Email unarchived: %s\n", email.ID)
 	return nil
 }
 

@@ -32,6 +32,7 @@ type Email struct {
 	Status      string        `json:"status"`
 	Attachments []*Attachment `json:"attachments"`
 	ReadAt      *time.Time    `json:"readAt,omitempty"`
+	ArchivedAt  *time.Time    `json:"archivedAt,omitempty"`
 	SentAt      *time.Time    `json:"sentAt,omitempty"`
 	CreatedAt   time.Time     `json:"createdAt"`
 	DeletedAt   *time.Time    `json:"deletedAt,omitempty"`
@@ -98,13 +99,16 @@ func (c *Client) SendEmail(ctx context.Context, req *SendEmailRequest) (*EmailDe
 	return &email, nil
 }
 
-func (c *Client) ListEmails(ctx context.Context, page, pageSize int, direction string, isRead *bool) (*EmailListResponse, error) {
+func (c *Client) ListEmails(ctx context.Context, page, pageSize int, direction string, isRead *bool, archived *bool) (*EmailListResponse, error) {
 	path := fmt.Sprintf("/api/v1/email?page=%d&pageSize=%d", page, pageSize)
 	if direction != "" {
 		path += "&direction=" + url.QueryEscape(direction)
 	}
 	if isRead != nil {
 		path += fmt.Sprintf("&isRead=%t", *isRead)
+	}
+	if archived != nil {
+		path += fmt.Sprintf("&archived=%t", *archived)
 	}
 	resp, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -146,6 +150,32 @@ func (c *Client) MarkEmailAsRead(ctx context.Context, id string) (*EmailDetail, 
 
 func (c *Client) MarkEmailAsUnread(ctx context.Context, id string) (*EmailDetail, error) {
 	resp, err := c.do(ctx, http.MethodPost, "/api/v1/email/"+id+"/mark-as-unread", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var email EmailDetail
+	if err := json.Unmarshal(resp.Data, &email); err != nil {
+		return nil, fmt.Errorf("decoding email: %w", err)
+	}
+	return &email, nil
+}
+
+func (c *Client) ArchiveEmail(ctx context.Context, id string) (*EmailDetail, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/email/"+id+"/archive", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var email EmailDetail
+	if err := json.Unmarshal(resp.Data, &email); err != nil {
+		return nil, fmt.Errorf("decoding email: %w", err)
+	}
+	return &email, nil
+}
+
+func (c *Client) UnarchiveEmail(ctx context.Context, id string) (*EmailDetail, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/api/v1/email/"+id+"/unarchive", nil)
 	if err != nil {
 		return nil, err
 	}
