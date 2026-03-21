@@ -93,6 +93,17 @@ Flowmi is an OAuth2 PKCE auth ecosystem with three independent repos:
 - **flowmi** (Go CLI) → **web** (SvelteKit auth server) → **server** (Go REST API + Postgres/Redis)
 - Flow: CLI generates PKCE pair → opens browser to web `/authorize` → user logs in → redirect with auth code → CLI exchanges code for tokens
 
+## Release
+
+Pushing a version tag triggers GitHub Actions to build cross-platform binaries and create a GitHub release automatically. To release:
+
+```bash
+git tag v0.x.x
+git push origin v0.x.x
+```
+
+No need to manually run `gh release create` or build artifacts — the CI pipeline handles everything.
+
 ## GitHub
 
 All Flowmi repos are under the **flowmi-ai** organization. The git remote uses the `humid` SSH alias (`git@humid:flowmi-ai/flowmi.git`). Run `gh auth switch` to the appropriate account before pushing, creating PRs, etc.
